@@ -22,7 +22,9 @@
     Single line string and comma-sepparated list of tables you want to setup an archive for.
     Of none provided, this solution will query all tables in Defender and will setup archival on al of them.
     .PARAMETER outputAdxScript [switch]
-    Used for debugging purposed so that the script will output the ADX script on screen before it gets passed into the deployments.
+    Used for debugging purposes so that the script will output the ADX script on screen before it gets passed into the deployments.
+    .PARAMETER noDeploy [switch]
+    Used for debugging purposes so that the actual Azure deployment steps are skipped.
 
 #>
 
@@ -48,7 +50,10 @@ param (
     [string] $m365defenderTables,
 
     [Parameter (Mandatory = $false)]
-    [string] $outputAdxScript
+    [string] $outputAdxScript,
+
+    [Parameter (Mandatory = $false)]
+    [string] $noDeploy
 
 )
 
@@ -140,10 +145,10 @@ $headers = @{
 
 # Output all tables that will be processed for schema query
 
-Write-Host "      ─┰─ " -ForegroundColor DarkGray
-Write-Host "       ┖─ The folowwing tables will be processed from Microsoft 365 Defender:" -ForegroundColor DarkGray
+Write-Host "      ─┰─ " -ForegroundColor Gray
+Write-Host "       ┖─ The folowwing tables will be processed from Microsoft 365 Defender:" -ForegroundColor Gray
 foreach($table in $m365defenderTables) {
-    Write-Host "             - $($table)" -ForegroundColor DarkGray
+    Write-Host "             - $($table)" -ForegroundColor Gray
 }
 
 ### Loop through all m365d tables, query schema and construct ADX script variable
@@ -151,7 +156,7 @@ foreach($table in $m365defenderTables) {
 foreach ($tableName in $m365defenderTables) {
 
     # Query schema @ AdvancedHunting API
-    Write-Host "       ┖─ Querying schema for '$($tableName)' @ AdvancedHunting API..." -ForegroundColor DarkGray
+    Write-Host "       ┖─ Querying schema for '$($tableName)' @ AdvancedHunting API..." -ForegroundColor Gray
 
     $body = ConvertTo-Json -InputObject @{ 'Query' = $tableName + $query }
     try {
@@ -205,7 +210,7 @@ foreach ($tableName in $m365defenderTables) {
 
     # Write ADX commands to ADX script variable
 
-    Write-Host "           ┖─ Adding ADX commands for $($tableName) to ADX script..." -ForegroundColor DarkGray
+    Write-Host "           ┖─ Adding ADX commands for $($tableName) to ADX script..." -ForegroundColor Gray
 
     $adxScript = $adxScript + "$createRawTable"
     $adxScript = $adxScript + "`n`n$createRawMapping"
@@ -220,13 +225,13 @@ $adxScript = $adxScript + "`n"
 
 # Display ADX script (optional depending on outputAdxScript switch)
 If ($outputAdxScript) {
-    Write-Host ""
     Write-Host "              ✓ Done generating ADX script, press any key to display..." -ForegroundColor DarkGreen
     Write-Host ""
 
     [void][System.Console]::ReadKey($true)
 
-    Write-Host $adxScript -ForegroundColor Cyan
+    Clear-Host
+    Write-Host $adxScript -ForegroundColor Magenta
     Write-Host "                Press any key to continue..." -ForegroundColor DarkGreen
 
     [void][System.Console]::ReadKey($true)
@@ -252,8 +257,8 @@ Write-Host "   ▲ Signing in to Azure..." -ForegroundColor Cyan
 Add-AzAccount -Credential $psCred -TenantId $credentials.tenantId -ServicePrincipal -SubscriptionId $subscriptionId | Out-Null
 
 # Check if required Azure role prerequisites are met
-Write-Host "      ─┰─ " -ForegroundColor DarkGray
-Write-Host "       ┖─ Checking if role assignment prerequisites are met..." -ForegroundColor DarkGray
+Write-Host "      ─┰─ " -ForegroundColor Gray
+Write-Host "       ┖─ Checking if role assignment prerequisites are met..." -ForegroundColor Gray
 $assignedRoles = Get-AzRoleAssignment | Select-Object RoleDefinitionName -ExpandProperty RoleDefinitionName 
 if (!($assignedRoles -contains "Owner")) {
     if (!(($assignedRoles -contains "Contributor") -and ($assignedRoles -contains "User Access Administrator")))
@@ -267,8 +272,8 @@ if (!($assignedRoles -contains "Owner")) {
 Write-Host "              ✓ Role assignment prerequisites are setup correctly" -ForegroundColor Green
 
 # Check if required Azure resource providers are registered
-Write-Host "       ┃" -ForegroundColor DarkGray
-Write-Host "       ┖─ Checking if Azure resource providers are registered..." -ForegroundColor DarkGray
+Write-Host "       ┃" -ForegroundColor Gray
+Write-Host "       ┖─ Checking if Azure resource providers are registered..." -ForegroundColor Gray
 
 try {
     $resourceProviderEventHubStatus = Get-AzResourceProvider -ProviderNamespace Microsoft.EventHub | Select-Object -ExpandProperty RegistrationState
@@ -307,8 +312,8 @@ Write-Host "              ✓ All required Azure resource providers are register
 ### Deploy Azure Event Hub(s)
 
 # Since we can only deply 10 Event Hubs per Event Hub Namespace, we need to determine how many Event Hub Namespaces we'll be needing
-Write-Host "       ┃" -ForegroundColor DarkGray
-Write-Host "       ┖─ Calculating the amount of Event Hub Namespaces needed..." -ForegroundColor DarkGray
+Write-Host "       ┃" -ForegroundColor Gray
+Write-Host "       ┖─ Calculating the amount of Event Hub Namespaces needed..." -ForegroundColor Gray
 
 $eventHubNamespacesCount = [int][math]::ceiling($m365defenderTables.Count / 10) 
 Write-Host "              ✓ In order to create $($m365defenderTables.Count) Event Hubs, we'll be needing $($eventHubNamespacesCount) Event Hub Namespaces." -ForegroundColor Green
@@ -320,34 +325,39 @@ For ($count = 1; $count -le $eventHubNamespacesCount; $count++) {
     $eventHubNames          = $m365defenderTables.ToLower() | Select-Object -First 10 -Skip (($count - 1) * 10) | Foreach-Object { "insights-logs-advancedhunting-$_" }
     
     if(1 -eq $count) {
-        Write-Host "                ─┰─ " -ForegroundColor DarkGray
+        Write-Host "                ─┰─ " -ForegroundColor Gray
     } else {
-        Write-Host "                 ┃" -ForegroundColor DarkGray
+        Write-Host "                 ┃" -ForegroundColor Gray
     }
-    Write-Host "                 ┖─ Deploying Event Hub Namespace [ $($count) / $($eventHubNamespacesCount) ] - '$($deploymentName)'..." -ForegroundColor DarkGray
-    Write-Host "                     ┖─ Event Hub Namespace '$($eventHubNamespaceName)'" -ForegroundColor DarkGray
+    Write-Host "                 ┖─ Deploying Event Hub Namespace [ $($count) / $($eventHubNamespacesCount) ] - '$($deploymentName)'..." -ForegroundColor Gray
+    Write-Host "                     ┖─ Event Hub Namespace '$($eventHubNamespaceName)'" -ForegroundColor Gray
     foreach($eventHubName in $eventHubNames) {
-        Write-Host "                         ┖─ Event Hub 'insights-logs-advancedhunting-$($eventHubName)'" -ForegroundColor DarkGray
+        Write-Host "                         ┖─ Event Hub '$($eventHubName)'" -ForegroundColor Gray
     }
 
-    try {
-        $deployment = New-AzResourceGroupDeployment `
-            -Name $deploymentName `
-            -ResourceGroupName $resourceGroupName `
-            -TemplateFile ./arm-templates/eventhub.template.json `
-            -namespaceName $eventHubNamespaceName `
-            -eventHubNames $eventHubNames
-        If ($deployment.ProvisioningState -eq "Succeeded"){
-            Write-Host "                      ✓ Deployment of '$($eventHubNamespaceName)' was successful" -ForegroundColor Green
-        } else {
-            Write-Host "                      ! There was an issue deploying '$($eventHubNamespaceName)' please check deployment '$($deployment.DeploymentName)'!" -ForegroundColor Yellow
+    If(!$noDeploy) {
+        try {
+            $deployment = New-AzResourceGroupDeployment `
+                -Name $deploymentName `
+                -ResourceGroupName $resourceGroupName `
+                -TemplateFile ./arm-templates/eventhub.template.json `
+                -namespaceName $eventHubNamespaceName `
+                -eventHubNames $eventHubNames
+            If ($deployment.ProvisioningState -eq "Succeeded") {
+                Write-Host "                      ✓ Deployment of '$($eventHubNamespaceName)' was successful" -ForegroundColor Green
+            }
+            else {
+                Write-Host "                      ! There was an issue deploying '$($eventHubNamespaceName)' please check deployment '$($deployment.DeploymentName)'!" -ForegroundColor Yellow
+            }
         }
-    }
-    catch {
-        Write-Host ""
-        Write-Host "                     ✘ There was a problem deploying to Azure! Exiting..." -ForegroundColor Red
-        Write-Host ""
-        exit
+        catch {
+            Write-Host ""
+            Write-Host "                     ✘ There was a problem deploying to Azure! Exiting..." -ForegroundColor Red
+            Write-Host ""
+            exit
+        }
+    } else {
+        Write-Host "                     ! Switch 'noDeploy' was provided, skipping Azure deployment..." -ForegroundColor Magenta
     }
 }
 Write-Host ""
