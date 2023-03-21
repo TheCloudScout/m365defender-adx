@@ -52,6 +52,15 @@ param (
 
 )
 
+### ADX details
+
+$eventHubNamespaceNamePrefix    = "eh-defender-archive"
+$adxClusterName                 = "adx-defender-archive"
+$adxDatabaseName                = "m365d-archive"
+$adxTableRetention              = "365d"
+$adxTableRawRetention           = "1d"
+$adxScript                      = ""
+
 ### M365Defender details
 
 $query = " | getschema | project ColumnName, ColumnType"
@@ -80,7 +89,8 @@ $m365defenderSupportedTables = @(
     "CloudAppEvents"
 )
 
-# If m365defenderTables parameter was used; check if tables provided and Set m365d tables variable to determine which tables to process
+# If m365defenderTables parameter was used; contents need to be prepped (split and trimmed)
+# If no specific tables are passed in parameter, it will use all supported tables
 $exit = $false
 If ($m365defenderTables) {
     # Proces m365defenderTables parameter (split and trim) into array
@@ -102,27 +112,16 @@ If ($m365defenderTables) {
 
 }
 
-### ADX details
-
-$eventHubNamespaceNamePrefix    = "eh-defender-archive"
-$adxClusterName                 = "adx-defender-archive"
-$adxDatabaseName                = "m365d-archive"
-$adxTableRetention              = "365d"
-$adxTableRawRetention           = "1d"
-$adxScript                      = ""
-
-### Get authorization token
+### Get AAD authorization token
 
 Clear-Host
 
 Write-Host ""
 Write-Host "   ▲ Getting access token from api.securitycenter.microsoft.com..." -ForegroundColor Cyan
 
-# $resourceAppIdUri = 'https://api.securitycenter.microsoft.com'
 $scope = 'https://graph.microsoft.com/.default'
 $oAuthUri = "https://login.microsoftonline.com/$tenantId/oauth2/v2.0/token"
 $body = [Ordered] @{
-    # resource      = "$resourceAppIdUri"
     scope           = $scope
     client_id       = "$appId"
     client_secret   = "$appSecret"
@@ -131,14 +130,7 @@ $body = [Ordered] @{
 $response = Invoke-RestMethod -Method Post -Uri $oAuthUri -Body $body -ErrorAction Stop
 $aadToken = $response.access_token
 
-### Construct header for API requests towards defender
-
-# $url = "https://api-eu.securitycenter.microsoft.com/api/advancedqueries/run"
-# $headers = @{ 
-#     'Content-Type' = 'application/json'
-#     Accept         = 'application/json'
-#     Authorization  = "Bearer $aadToken" 
-# }
+### Construct header for API requests towards AdvancedHunting API
 
 $url = "https://graph.microsoft.com/v1.0/security/runHuntingQuery"
 $headers = @{ 
@@ -146,19 +138,7 @@ $headers = @{
     Authorization  = "Bearer $aadToken" 
 }
 
-### Set m365d tables variable to determine which tables to process
-
-If ($m365defenderTables) {
-    $m365defenderTables = ($m365defenderTables -split (',')).trim()
-    foreach($table in $m365defenderTables) {
-        if (!($m365defenderSupportedTables -contains $table)) {
-            Write-Host " ✘ Something went wrong while querying the AdvancedHunting API!" -ForegroundColor Red
-        }
-    }
-} else {
-    $m365defenderTables = $m365defenderSupportedTables
-
-}
+# Output all tables that will be processed for schema query
 
 Write-Host "      ─┰─ " -ForegroundColor DarkGray
 Write-Host "       ┖─ The folowwing tables will be processed from Microsoft 365 Defender:" -ForegroundColor DarkGray
@@ -171,7 +151,6 @@ foreach($table in $m365defenderTables) {
 foreach ($tableName in $m365defenderTables) {
 
     # Query schema @ AdvancedHunting API
-    
     Write-Host "       ┖─ Querying schema for '$($tableName)' @ AdvancedHunting API..." -ForegroundColor DarkGray
 
     $body = ConvertTo-Json -InputObject @{ 'Query' = $tableName + $query }
