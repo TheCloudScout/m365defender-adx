@@ -1,0 +1,131 @@
+{
+  "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
+  "contentVersion": "1.0.0.0",
+  "parameters": {
+    "namespaceName": {
+      "type": "string",
+      "defaultValue": "eh-defender-archive-01"
+    },
+    "eventHubNames": {
+      "type": "array",
+      "defaultValue": [],
+      "metadata": {
+        "description": "Array containing all Event Hub names."
+      }
+    },
+    "sku": {
+      "type": "string",
+      "allowedValues": [
+        "basic",
+        "standard"
+      ],
+      "defaultValue": "standard"
+    },
+    "skuCapacity": {
+      "type": "int",
+      "minValue": 0,
+      "maxValue": 20,
+      "defaultValue": 1
+    },
+    "partitionCount": {
+      "type": "int",
+      "minValue": 1,
+      "maxValue": 32,
+      "defaultValue": 8
+    },
+    "zoneRedundant": {
+      "type": "bool",
+      "defaultValue": false
+    },
+    "messageRetentionInDays": {
+      "type": "int",
+      "minValue": 1,
+      "maxValue": 7,
+      "defaultValue": 7
+    }
+  },
+  "resources": [
+    {
+      "type": "Microsoft.EventHub/namespaces",
+      "apiVersion": "2018-01-01-preview",
+      "name": "[parameters('namespaceName')]",
+      "location": "[resourceGroup().location]",
+      "sku": {
+        "name": "[parameters('sku')]",
+        "tier": "[parameters('sku')]",
+        "capacity": "[parameters('skuCapacity')]"
+      },
+      "properties": {
+        "zoneRedundant": "[parameters('zoneRedundant')]",
+        "isAutoInflateEnabled": false,
+        "maximumThroughputUnits": 0,
+        "kafkaEnabled": true
+      }
+    },
+    {
+      "type": "Microsoft.EventHub/namespaces/AuthorizationRules",
+      "apiVersion": "2017-04-01",
+      "name": "[concat(parameters('namespaceName'), '/RootManageSharedAccessKey')]",
+      "location": "[resourceGroup().location]",
+      "dependsOn": [
+        "[parameters('namespaceName')]"
+      ],
+      "properties": {
+        "rights": [
+          "Listen",
+          "Manage",
+          "Send"
+        ]
+      }
+    },
+    {
+      "type": "Microsoft.EventHub/namespaces/eventhubs",
+      "apiVersion": "2017-04-01",
+      "name": "[concat(parameters('namespaceName'), '/', parameters('eventHubNames')[copyIndex()])]",
+      "location": "[resourceGroup().location]",
+      "dependsOn": [
+        "[resourceId('Microsoft.EventHub/namespaces', parameters('namespaceName'))]"
+      ],
+      "copy": {
+        "name": "eventhubs",
+        "count": "[length(parameters('eventHubNames'))]"
+      },
+      "properties": {
+        "messageRetentionInDays": "[parameters('messageRetentionInDays')]",
+        "partitionCount": "[parameters('partitionCount')]",
+        "status": "Active"
+      }
+    },
+    {
+      "type": "Microsoft.EventHub/namespaces/eventhubs/consumergroups",
+      "apiVersion": "2017-04-01",
+      "name": "[concat(parameters('namespaceName'), '/', parameters('eventHubNames')[copyIndex()], '/$Default')]",
+      "location": "[resourceGroup().location]",
+      "dependsOn": [
+        "[resourceId('Microsoft.EventHub/namespaces/eventhubs', parameters('namespaceName'), parameters('eventHubNames')[copyIndex()])]",
+        "[resourceId('Microsoft.EventHub/namespaces', parameters('namespaceName'))]"
+      ],
+      "copy": {
+        "name": "eventhubs",
+        "count": "[length(parameters('eventHubNames'))]"
+      },
+      "properties": {}
+    },
+    {
+      "type": "Microsoft.EventHub/namespaces/networkRuleSets",
+      "apiVersion": "2018-01-01-preview",
+      "name": "[concat(parameters('namespaceName'), '/default')]",
+      "location": "[resourceGroup().location]",
+      "dependsOn": [
+        "[parameters('namespaceName')]"
+      ],
+      "properties": {
+        "publicNetworkAccess": "Enabled",
+        "defaultAction": "Allow",
+        "virtualNetworkRules": [],
+        "ipRules": []
+      }
+    }
+  ],
+  "outputs": {}
+}
