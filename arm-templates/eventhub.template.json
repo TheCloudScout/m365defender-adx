@@ -31,7 +31,7 @@
       "type": "int",
       "minValue": 1,
       "maxValue": 32,
-      "defaultValue": 8
+      "defaultValue": 4
     },
     "zoneRedundant": {
       "type": "bool",

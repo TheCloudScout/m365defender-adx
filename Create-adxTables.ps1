@@ -16,11 +16,13 @@
     An active secret for the app registration to query Defender and to deploy Azure resources.
     .PARAMETER subscriptionId [string]
     Azure subscription Id in where archive resources should be deployed.
-    .PARAMETER resourceGroup [string]
+    .PARAMETER resourceGroupName [string]
     Name of resource group in which archive resources should be deployed.
     .PARAMETER m365defenderTables [string]
     Single line string and comma-sepparated list of tables you want to setup an archive for.
     Of none provided, this solution will query all tables in Defender and will setup archival on al of them.
+    .PARAMETER outputAdxScript [switch]
+    Used for debugging purposed so that the script will output the ADX script on screen before it gets passed into the deployments.
 
 #>
 
@@ -40,16 +42,65 @@ param (
     [string] $subscriptionId,
 
     [Parameter (Mandatory = $true)]
-    [string] $resourceGroup,
+    [string] $resourceGroupName,
 
     [Parameter (Mandatory = $false)]
-    [string] $m365defenderTables
+    [string] $m365defenderTables,
+
+    [Parameter (Mandatory = $false)]
+    [string] $outputAdxScript
 
 )
 
 ### M365Defender details
 
 $query = " | getschema | project ColumnName, ColumnType"
+# Supported tables for streaming to Event Hub as of time of writing. Update accordingly if applicable
+$m365defenderSupportedTables = @(
+    "AlertInfo",
+    "AlertEvidence",
+    "DeviceInfo",
+    "DeviceNetworkInfo",
+    "DeviceProcessEvents",
+    "DeviceNetworkEvents",
+    "DeviceFileEvents",
+    "DeviceRegistryEvents",
+    "DeviceLogonEvents",
+    "DeviceImageLoadEvents",
+    "DeviceEvents",
+    "DeviceFileCertificateInfo"
+    "EmailAttachmentInfo",
+    "EmailEvents",
+    "EmailPostDeliveryEvents",
+    "EmailUrlInfo",
+    "UrlClickEvents",
+    "IdentityLogonEvents",
+    "IdentityQueryEvents",
+    "IdentityDirectoryEvents",
+    "CloudAppEvents"
+)
+
+# If m365defenderTables parameter was used; check if tables provided and Set m365d tables variable to determine which tables to process
+$exit = $false
+If ($m365defenderTables) {
+    # Proces m365defenderTables parameter (split and trim) into array
+    $m365defenderTables = ($m365defenderTables -split (',')).trim()
+    foreach ($table in $m365defenderTables) {
+        # Check if all provided table names are support by streaming API
+        if (!($m365defenderSupportedTables -contains $table)) {
+            Write-Host " ✘ Invalid 'm365defenderTables' parameter!" -ForegroundColor Red
+            Write-Host "   Table name '$($Table)' is currently not supported by streaming API." -ForegroundColor Red
+            Write-Host ""
+            $exit = $true
+        }
+    }
+    if($exit){ 
+        exit
+    }
+} else {
+    $m365defenderTables = $m365defenderSupportedTables
+
+}
 
 ### ADX details
 
@@ -67,35 +118,46 @@ Clear-Host
 Write-Host ""
 Write-Host "   ▲ Getting access token from api.securitycenter.microsoft.com..." -ForegroundColor Cyan
 
-$resourceAppIdUri = 'https://api.securitycenter.microsoft.com'
-$oAuthUri = "https://login.microsoftonline.com/$tenantId/oauth2/token"
+# $resourceAppIdUri = 'https://api.securitycenter.microsoft.com'
+$scope = 'https://graph.microsoft.com/.default'
+$oAuthUri = "https://login.microsoftonline.com/$tenantId/oauth2/v2.0/token"
 $body = [Ordered] @{
-    resource      = "$resourceAppIdUri"
-    client_id     = "$appId"
-    client_secret = "$appSecret"
-    grant_type    = 'client_credentials'
+    # resource      = "$resourceAppIdUri"
+    scope           = $scope
+    client_id       = "$appId"
+    client_secret   = "$appSecret"
+    grant_type      = 'client_credentials'
 }
 $response = Invoke-RestMethod -Method Post -Uri $oAuthUri -Body $body -ErrorAction Stop
 $aadToken = $response.access_token
 
 ### Construct header for API requests towards defender
 
-$url = "https://api.securitycenter.microsoft.com/api/advancedqueries/run"
+# $url = "https://api-eu.securitycenter.microsoft.com/api/advancedqueries/run"
+# $headers = @{ 
+#     'Content-Type' = 'application/json'
+#     Accept         = 'application/json'
+#     Authorization  = "Bearer $aadToken" 
+# }
+
+$url = "https://graph.microsoft.com/v1.0/security/runHuntingQuery"
 $headers = @{ 
     'Content-Type' = 'application/json'
-    Accept         = 'application/json'
     Authorization  = "Bearer $aadToken" 
 }
 
-### Set m365d tables variable to dtermine which tables to process
+### Set m365d tables variable to determine which tables to process
 
 If ($m365defenderTables) {
     $m365defenderTables = ($m365defenderTables -split (',')).trim()
+    foreach($table in $m365defenderTables) {
+        if (!($m365defenderSupportedTables -contains $table)) {
+            Write-Host " ✘ Something went wrong while querying the AdvancedHunting API!" -ForegroundColor Red
+        }
+    }
 } else {
-    $m365defenderTables = @()
-    $body = ConvertTo-Json -InputObject @{ 'Query' = 'search * | distinct table=$table' }
-    $webResponse = Invoke-WebRequest -Method Post -Uri $url -Headers $headers -Body $body -ErrorAction Stop
-    $m365defenderTables = ($webResponse | ConvertFrom-Json).Results | Select-Object -ExpandProperty table
+    $m365defenderTables = $m365defenderSupportedTables
+
 }
 
 Write-Host "      ─┰─ " -ForegroundColor DarkGray
@@ -108,12 +170,19 @@ foreach($table in $m365defenderTables) {
 
 foreach ($tableName in $m365defenderTables) {
 
-    # Query schema @ Defender
+    # Query schema @ AdvancedHunting API
     
-    Write-Host "       ┖─ Querying schema for $($tableName) @ Defender..." -ForegroundColor DarkGray
+    Write-Host "       ┖─ Querying schema for '$($tableName)' @ AdvancedHunting API..." -ForegroundColor DarkGray
 
     $body = ConvertTo-Json -InputObject @{ 'Query' = $tableName + $query }
-    $webResponse = Invoke-WebRequest -Method Post -Uri $url -Headers $headers -Body $body -ErrorAction Stop
+    try {
+        $webResponse = Invoke-WebRequest -Method Post -Uri $url -Headers $headers -Body $body -ErrorAction Stop
+    }
+    catch {
+        Write-Host "              ✘ Something went wrong while querying the AdvancedHunting API!" -ForegroundColor Red
+        Write-Host ""
+        exit
+    }
     $response = $webResponse | ConvertFrom-Json
     $results = $response.Results
     $tableSchema = $response.Schema
@@ -170,19 +239,23 @@ foreach ($tableName in $m365defenderTables) {
 
 $adxScript = $adxScript + "`n"
 
-# Display ADX script
-Write-Host ""
-Write-Host "       ✓ Done generating ADX script, press any key to display..." -ForegroundColor DarkGreen
-Write-Host ""
+# Display ADX script (optional depending on outputAdxScript switch)
+If ($outputAdxScript) {
+    Write-Host ""
+    Write-Host "              ✓ Done generating ADX script, press any key to display..." -ForegroundColor DarkGreen
+    Write-Host ""
 
-[void][System.Console]::ReadKey($true)
+    [void][System.Console]::ReadKey($true)
 
-Write-Host $adxScript -ForegroundColor Cyan
-Write-Host "       Press any key to continue..." -ForegroundColor DarkGreen
+    Write-Host $adxScript -ForegroundColor Cyan
+    Write-Host "                Press any key to continue..." -ForegroundColor DarkGreen
 
-[void][System.Console]::ReadKey($true)
-
-Clear-Host
+    [void][System.Console]::ReadKey($true)
+    Clear-Host
+} else {
+    Write-Host "              ✓ Done generating ADX script!" -ForegroundColor DarkGreen
+    Write-Host ""
+}
 
 ### Deploy Azure resources
 
@@ -206,12 +279,51 @@ $assignedRoles = Get-AzRoleAssignment | Select-Object RoleDefinitionName -Expand
 if (!($assignedRoles -contains "Owner")) {
     if (!(($assignedRoles -contains "Contributor") -and ($assignedRoles -contains "User Access Administrator")))
     {
-        Write-Host "              ✘ Application permission on Azure resource group '$($resourceGroup)' in subscription '$($subscriptionId)' are insufficient!" -ForegroundColor Red
+        Write-Host "              ✘ Application permission on Azure resource group '$($resourceGroupName)' in subscription '$($subscriptionId)' are insufficient!" -ForegroundColor Red
         Write-Host "                Make sure that appId '$($appId)' is either 'Owner', or both 'Contributor' and 'UserAccess Administrator'" -ForegroundColor Red
+        Write-Host ""
         exit
     }
 }
 Write-Host "              ✓ Role assignment prerequisites are setup correctly" -ForegroundColor Green
+
+# Check if required Azure resource providers are registered
+Write-Host "       ┃" -ForegroundColor DarkGray
+Write-Host "       ┖─ Checking if Azure resource providers are registered..." -ForegroundColor DarkGray
+
+try {
+    $resourceProviderEventHubStatus = Get-AzResourceProvider -ProviderNamespace Microsoft.EventHub | Select-Object -ExpandProperty RegistrationState
+    $resourceProviderKustoStatus = Get-AzResourceProvider -ProviderNamespace Microsoft.Kusto | Select-Object -ExpandProperty RegistrationState
+}
+catch {
+    try {
+        $resourceProviderEventHubStatus = Get-AzResourceProvider -ProviderNamespace Microsoft.EventHub | Select-Object -ExpandProperty RegistrationState
+        $resourceProviderKustoStatus = Get-AzResourceProvider -ProviderNamespace Microsoft.Kusto | Select-Object -ExpandProperty RegistrationState
+    }
+    catch {
+        Write-Host "              ✘ There were timeouts while retrieving the Azure resource provider statuses. Exiting..." -ForegroundColor Red
+        Write-Host ""
+        exit
+    }
+}
+
+$exit = $false
+if (($resourceProviderEventHubStatus -contains "Unregistered")) {
+        Write-Host "              ✘ Azure resource provider 'Microsoft.EventHub' is not registered on subscription '$($subscriptionId)'!" -ForegroundColor Red
+        Write-Host "                Please register this resource provider and try again." -ForegroundColor Red
+        $exit = $true
+}
+if (($resourceProviderKustoStatus -contains "Unregistered")) {
+        Write-Host "              ✘ Azure resource provider 'Microsoft.Kusto' is not registered on subscription '$($subscriptionId)'!" -ForegroundColor Red
+        Write-Host "                Please register this resource provider and try again." -ForegroundColor Red
+        $exit = $true
+}
+if ($exit) {
+    Write-Host ""
+    exit
+}
+
+Write-Host "              ✓ All required Azure resource providers are registered properly" -ForegroundColor Green
 
 ### Deploy Azure Event Hub(s)
 
@@ -223,34 +335,50 @@ $eventHubNamespacesCount = [int][math]::ceiling($m365defenderTables.Count / 10)
 Write-Host "              ✓ In order to create $($m365defenderTables.Count) Event Hubs, we'll be needing $($eventHubNamespacesCount) Event Hub Namespaces." -ForegroundColor Green
 
 For ($count = 1; $count -le $eventHubNamespacesCount; $count++) {
-    $eventHubNamespaceName = "$($eventHubNamespaceNamePrefix)-0$($count)"
-    $eventHubNames = $m365defenderTables | Select-Object -First 10 -Skip (($count - 1) * 10) # Select ten tables for event hub creating
+    $deploymentName         = "EventHubNamespace-$(Get-Date -Format "yyyMMdd-HHmmss")"
+    $eventHubNamespaceName  = "$($eventHubNamespaceNamePrefix)-0$($count)"
+    # Select ten tables for each Event Hub Namespace, make them lowercase and add prefix
+    $eventHubNames          = $m365defenderTables.ToLower() | Select-Object -First 10 -Skip (($count - 1) * 10) | Foreach-Object { "insights-logs-advancedhunting-$_" }
     
     if(1 -eq $count) {
         Write-Host "                ─┰─ " -ForegroundColor DarkGray
     } else {
         Write-Host "                 ┃" -ForegroundColor DarkGray
     }
-    Write-Host "                 ┖─ Deploying Event Hub Namespace $($count) / $($eventHubNamespacesCount)..." -ForegroundColor DarkGray
+    Write-Host "                 ┖─ Deploying Event Hub Namespace [ $($count) / $($eventHubNamespacesCount) ] - '$($deploymentName)'..." -ForegroundColor DarkGray
     Write-Host "                     ┖─ Event Hub Namespace '$($eventHubNamespaceName)'" -ForegroundColor DarkGray
     foreach($eventHubName in $eventHubNames) {
-        Write-Host "                         ┖─ Event Hub '$($eventHubName)'" -ForegroundColor DarkGray
+        Write-Host "                         ┖─ Event Hub 'insights-logs-advancedhunting-$($eventHubName)'" -ForegroundColor DarkGray
     }
 
     try {
-        New-AzResourceGroupDeployment `
-            -ResourceGroupName $resourceGroup `
-            -TemplateFile ../arm.templates/eventhub.template.json `
+        $deployment = New-AzResourceGroupDeployment `
+            -Name $deploymentName `
+            -ResourceGroupName $resourceGroupName `
+            -TemplateFile ./arm-templates/eventhub.template.json `
             -namespaceName $eventHubNamespaceName `
             -eventHubNames $eventHubNames
+        If ($deployment.ProvisioningState -eq "Succeeded"){
+            Write-Host "                      ✓ Deployment of '$($eventHubNamespaceName)' was successful" -ForegroundColor Green
+        } else {
+            Write-Host "                      ! There was an issue deploying '$($eventHubNamespaceName)' please check deployment '$($deployment.DeploymentName)'!" -ForegroundColor Yellow
+        }
     }
     catch {
         Write-Host ""
-        Write-Host "                 ✘ There was a problem deploying to Azure! Exiting..." -ForegroundColor Red
+        Write-Host "                     ✘ There was a problem deploying to Azure! Exiting..." -ForegroundColor Red
         Write-Host ""
         exit
     }
-
 }
+Write-Host ""
 
 ### Deploy Azure Data Explorer
+
+
+
+
+
+
+
+Write-Host ""
