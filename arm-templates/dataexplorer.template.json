@@ -1,5 +1,5 @@
 {
-  "$schema": "https://schema.management.azure.com/schemas/2015-01-01/deploymentTemplate.json#",
+  "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
   "contentVersion": "1.0.0.0",
   "parameters": {
     "adxClusterName": {
@@ -11,21 +11,21 @@
     },
     "tier": {
       "type": "string",
-      "defaultValue": "Basic",
+      "defaultValue": "Standard",
       "metadata": {
         "description": "Pricing tier i.e. Basic or Standard"
       }
     },
     "computeType": {
       "type": "string",
-      "defaultValue": "Dev(No SLA)_Standard_E2a_v4",
+      "defaultValue": "Standard_E2a_v4",
       "metadata": {
         "description": "Type of underlying compute used"
       }
     },
     "capacity": {
       "type": "int",
-      "defaultValue": 1,
+      "defaultValue": 2,
       "metadata": {
         "description": "number of throughput/processing units"
       }
@@ -78,8 +78,8 @@
     {
       "type": "Microsoft.Kusto/clusters",
       "apiVersion": "2022-12-29",
-      "location": "[resourceGroup().location]",
       "name": "[parameters('adxClusterName')]",
+      "location": "[resourceGroup().location]",
       "sku": {
         "name": "[parameters('computeType')]",
         "tier": "[parameters('tier')]",
@@ -102,8 +102,8 @@
 
       "type": "Microsoft.Kusto/clusters/databases",
       "apiVersion": "2022-12-29",
-      "location": "[resourceGroup().location]",
       "name": "[concat(parameters('adxClusterName'), '/', parameters('adxDatabaseName'))]",
+      "location": "[resourceGroup().location]",
       "dependsOn": [
         "[resourceId('Microsoft.Kusto/clusters', parameters('adxClusterName'))]"
       ],

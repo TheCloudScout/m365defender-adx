@@ -391,12 +391,13 @@ For ($count = 1; $count -le $eventHubNamespacesCount; $count++) {
     
     if (1 -eq $count) {
         Write-Host "                ─┰─ " -ForegroundColor Gray
+        Write-Host "                 ┖─ Deploying Azure Data Explorer Cluster - '$($deploymentName)'..." -ForegroundColor Gray
+        Write-Host "                     ┖─ ADX cluster name '$($adxClusterName)'" -ForegroundColor Gray
+        Write-Host "                         ┖─ Database name '$($adxDatabaseName)'" -ForegroundColor Gray
     }
-    else {
-        Write-Host "                 ┃" -ForegroundColor Gray
+    foreach($eventHubName in $eventHubNames) {
+        Write-Host "                             ┖─ Data Connection 'dc-$($eventHubName)'" -ForegroundColor Gray
     }
-    Write-Host "                 ┖─ Deploying Azure Data Explorer Cluster - '$($deploymentName)'..." -ForegroundColor Gray
-    Write-Host "                     ┖─ ADX cluster name '$($adxClusterName)'" -ForegroundColor Gray
 
     If (!$noDeploy) {
         try {
@@ -431,9 +432,10 @@ For ($count = 1; $count -le $eventHubNamespacesCount; $count++) {
 
 
 
-
-
 # Set Managed Identity Permissions
+
+
+
 
 
 Write-Host ""

@@ -1,0 +1,47 @@
+{
+    "$schema": "https://schema.management.azure.com/schemas/2015-01-01/deploymentParameters.json#",
+    "contentVersion": "1.0.0.0",
+    "parameters": {
+        "adxClusterName": {
+            "value": "adx-defender-archive"
+        },
+        "tier": {
+            "value": "Standard"
+        },
+        "computeType": {
+            "value": "Standard_E2a_v4"
+        },
+        "capacity": {
+            "value": 2
+        },
+        "autoScaleEnabled": {
+            "value": false
+        },
+        "autoScaleLimit": {
+            "value": 5
+        },
+        "adxDatabaseName": {
+            "value": "m365d-archive"
+        },
+        "adxScript": {
+            "value": ".create table TestTable (records:dynamic)"
+        },
+        "eventHubNamespaceName": {
+            "value": "eh-defender-archive-01"
+        },
+        "eventHubNames": {
+            "value": [
+                "insights-logs-advancedhunting-alertinfo",
+                "insights-logs-advancedhunting-alertevidence",
+                "insights-logs-advancedhunting-deviceinfo",
+                "insights-logs-advancedhunting-devicenetworkinfo",
+                "insights-logs-advancedhunting-deviceprocessevents",
+                "insights-logs-advancedhunting-devicenetworkevents",
+                "insights-logs-advancedhunting-devicefileevents",
+                "insights-logs-advancedhunting-deviceregistryevents",
+                "insights-logs-advancedhunting-devicelogonevents",
+                "insights-logs-advancedhunting-deviceimageloadevents"
+            ]
+        }
+    }
+}
