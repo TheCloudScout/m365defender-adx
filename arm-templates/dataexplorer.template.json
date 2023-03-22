@@ -1,0 +1,154 @@
+{
+  "$schema": "https://schema.management.azure.com/schemas/2015-01-01/deploymentTemplate.json#",
+  "contentVersion": "1.0.0.0",
+  "parameters": {
+    "adxClusterName": {
+      "type": "string",
+      "defaultValue": "[concat('adx', uniqueString(resourceGroup().id))]",
+      "metadata": {
+        "description": "Name of the cluster to create"
+      }
+    },
+    "tier": {
+      "type": "string",
+      "defaultValue": "Basic",
+      "metadata": {
+        "description": "Pricing tier i.e. Basic or Standard"
+      }
+    },
+    "computeType": {
+      "type": "string",
+      "defaultValue": "Dev(No SLA)_Standard_E2a_v4",
+      "metadata": {
+        "description": "Type of underlying compute used"
+      }
+    },
+    "capacity": {
+      "type": "int",
+      "defaultValue": 1,
+      "metadata": {
+        "description": "number of throughput/processing units"
+      }
+    },
+    "autoScaleEnabled": {
+      "type": "bool",
+      "defaultValue": false,
+      "metadata": {
+        "description": "Enable/disable auto-scaling"
+      }
+    },
+    "autoScaleLimit": {
+      "type": "int",
+      "defaultValue": 5,
+      "metadata": {
+        "description": "Enable/disable auto-scaling"
+      }
+    },
+    "adxDatabaseName": {
+      "type": "string",
+      "defaultValue": "kustodb",
+      "metadata": {
+        "description": "Name of the database to create"
+      }
+    },
+    "adxScript": {
+      "type": "string",
+      "defaultValue": "",
+      "metadata": {
+        "description": "Script containing all kusto commands to setup tables, mapping, functions and policies"
+      }
+    },
+    "eventHubNamespaceName": {
+      "type": "string",
+      "defaultValue": "",
+      "metadata": {
+        "description": "Name of the Event Hub Namespace containing all the Event Hubs"
+      }
+    },
+    "eventHubNames": {
+      "type": "array",
+      "defaultValue": [],
+      "metadata": {
+        "description": "Array containing all Event Hub names."
+      }
+    }
+  },
+  "variables": {},
+  "resources": [
+    {
+      "type": "Microsoft.Kusto/clusters",
+      "apiVersion": "2022-12-29",
+      "location": "[resourceGroup().location]",
+      "name": "[parameters('adxClusterName')]",
+      "sku": {
+        "name": "[parameters('computeType')]",
+        "tier": "[parameters('tier')]",
+        "capacity": "[parameters('capacity')]"
+      },
+      "properties": {
+        "optimizedAutoscale": {
+          "version": 1,
+          "isEnabled": "[parameters('autoScaleEnabled')]",
+          "minimum": "[parameters('capacity')]",
+          "maximum": "[parameters('autoScaleLimit')]"
+        },
+        "enableDiskEncryption": true
+      },
+      "identity": {
+        "type": "SystemAssigned"
+      }
+    },
+    {
+
+      "type": "Microsoft.Kusto/clusters/databases",
+      "apiVersion": "2022-12-29",
+      "location": "[resourceGroup().location]",
+      "name": "[concat(parameters('adxClusterName'), '/', parameters('adxDatabaseName'))]",
+      "dependsOn": [
+        "[resourceId('Microsoft.Kusto/clusters', parameters('adxClusterName'))]"
+      ],
+      "kind": "ReadWrite",
+      "properties": {
+        "softDeletePeriodInDays": 365,
+        "hotCachePeriodInDays": 31
+      }
+    },
+    {
+      "type": "Microsoft.Kusto/clusters/databases/scripts",
+      "apiVersion": "2022-12-29",
+      "name": "[format('{0}/{1}/{2}', parameters('adxClusterName'), parameters('adxDatabaseName'), 'adxScript')]",
+      "dependsOn": [
+        "[resourceId('Microsoft.Kusto/clusters/databases', parameters('adxClusterName'), parameters('adxDatabaseName'))]"
+      ],
+      "properties": {
+        "scriptContent": "[parameters('adxScript')]",
+        "continueOnErrors": false
+      }
+    },
+    {
+      "type": "Microsoft.Kusto/clusters/databases/dataConnections",
+      "apiVersion": "2022-12-29",
+      "name": "[format('{0}/{1}/{2}-{3}', parameters('adxClusterName'), parameters('adxDatabaseName'), 'dc', parameters('eventHubNames')[copyIndex()])]",
+      "dependsOn": [
+        "[resourceId('Microsoft.Kusto/clusters/databases', parameters('adxClusterName'), parameters('adxDatabaseName'))]",
+        "[resourceId('Microsoft.Kusto/clusters/databases/scripts', parameters('adxClusterName'), parameters('adxDatabaseName'), 'adxScript')]"
+      ],
+      "location": "[resourceGroup().location]",
+      "kind": "EventHub",
+      "copy": {
+        "name": "eventhubs",
+        "count": "[length(parameters('eventHubNames'))]"
+      },
+      "properties": {
+        "compression": "None",
+        "databaseRouting": "Single",
+        "consumerGroup": "$Default",
+        "dataFormat": "MULTIJSON",
+        "eventHubResourceId": "[resourceId('Microsoft.EventHub/namespaces/eventhubs', parameters('eventHubNamespaceName'), parameters('eventHubNames')[copyIndex()])]",
+        "managedIdentityResourceId": "[resourceId('Microsoft.Kusto/clusters', parameters('adxClusterName'))]",
+        "mappingRuleName": "[concat(parameters('eventHubNames')[copyIndex()],'RawMapping')]",
+        "tableName": "[concat(parameters('eventHubNames')[copyIndex()],'Raw')]"
+      }
+    }
+  ]
+}

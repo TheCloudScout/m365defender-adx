@@ -2,7 +2,7 @@
   "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
   "contentVersion": "1.0.0.0",
   "parameters": {
-    "namespaceName": {
+    "eventHubNamespaceName": {
       "type": "string",
       "defaultValue": "eh-defender-archive-01"
     },
@@ -48,7 +48,7 @@
     {
       "type": "Microsoft.EventHub/namespaces",
       "apiVersion": "2018-01-01-preview",
-      "name": "[parameters('namespaceName')]",
+      "name": "[parameters('eventHubNamespaceName')]",
       "location": "[resourceGroup().location]",
       "sku": {
         "name": "[parameters('sku')]",
@@ -65,10 +65,10 @@
     {
       "type": "Microsoft.EventHub/namespaces/AuthorizationRules",
       "apiVersion": "2017-04-01",
-      "name": "[concat(parameters('namespaceName'), '/RootManageSharedAccessKey')]",
+      "name": "[concat(parameters('eventHubNamespaceName'), '/RootManageSharedAccessKey')]",
       "location": "[resourceGroup().location]",
       "dependsOn": [
-        "[parameters('namespaceName')]"
+        "[parameters('eventHubNamespaceName')]"
       ],
       "properties": {
         "rights": [
@@ -81,10 +81,10 @@
     {
       "type": "Microsoft.EventHub/namespaces/eventhubs",
       "apiVersion": "2017-04-01",
-      "name": "[concat(parameters('namespaceName'), '/', parameters('eventHubNames')[copyIndex()])]",
+      "name": "[concat(parameters('eventHubNamespaceName'), '/', parameters('eventHubNames')[copyIndex()])]",
       "location": "[resourceGroup().location]",
       "dependsOn": [
-        "[resourceId('Microsoft.EventHub/namespaces', parameters('namespaceName'))]"
+        "[resourceId('Microsoft.EventHub/namespaces', parameters('eventHubNamespaceName'))]"
       ],
       "copy": {
         "name": "eventhubs",
@@ -99,11 +99,11 @@
     {
       "type": "Microsoft.EventHub/namespaces/eventhubs/consumergroups",
       "apiVersion": "2017-04-01",
-      "name": "[concat(parameters('namespaceName'), '/', parameters('eventHubNames')[copyIndex()], '/$Default')]",
+      "name": "[concat(parameters('eventHubNamespaceName'), '/', parameters('eventHubNames')[copyIndex()], '/$Default')]",
       "location": "[resourceGroup().location]",
       "dependsOn": [
-        "[resourceId('Microsoft.EventHub/namespaces/eventhubs', parameters('namespaceName'), parameters('eventHubNames')[copyIndex()])]",
-        "[resourceId('Microsoft.EventHub/namespaces', parameters('namespaceName'))]"
+        "[resourceId('Microsoft.EventHub/namespaces/eventhubs', parameters('eventHubNamespaceName'), parameters('eventHubNames')[copyIndex()])]",
+        "[resourceId('Microsoft.EventHub/namespaces', parameters('eventHubNamespaceName'))]"
       ],
       "copy": {
         "name": "eventhubs",
@@ -114,10 +114,10 @@
     {
       "type": "Microsoft.EventHub/namespaces/networkRuleSets",
       "apiVersion": "2018-01-01-preview",
-      "name": "[concat(parameters('namespaceName'), '/default')]",
+      "name": "[concat(parameters('eventHubNamespaceName'), '/default')]",
       "location": "[resourceGroup().location]",
       "dependsOn": [
-        "[parameters('namespaceName')]"
+        "[parameters('eventHubNamespaceName')]"
       ],
       "properties": {
         "publicNetworkAccess": "Enabled",
@@ -127,5 +127,10 @@
       }
     }
   ],
-  "outputs": {}
+  "outputs": {
+    "eventHubNamespaceResourceId": {
+      "type": "string",
+      "value": "[resourceId('Microsoft.EventHub/namespaces', parameters('eventHubNamespaceName'))]"
+    }
+  }
 }
