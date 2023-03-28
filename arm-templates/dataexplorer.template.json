@@ -1,5 +1,5 @@
 {
-  "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
+  "$schema": "https://schema.management.azure.com/schemas/2015-01-01/deploymentTemplate.json#",
   "contentVersion": "1.0.0.0",
   "parameters": {
     "adxClusterName": {
@@ -65,7 +65,7 @@
         "description": "Name of the Event Hub Namespace containing all the Event Hubs"
       }
     },
-    "eventHubNames": {
+    "tableNames": {
       "type": "array",
       "defaultValue": [],
       "metadata": {
@@ -128,7 +128,7 @@
     {
       "type": "Microsoft.Kusto/clusters/databases/dataConnections",
       "apiVersion": "2022-12-29",
-      "name": "[format('{0}/{1}/{2}-{3}', parameters('adxClusterName'), parameters('adxDatabaseName'), 'dc', parameters('eventHubNames')[copyIndex()])]",
+      "name": "[format('{0}/{1}/{2}-{3}', parameters('adxClusterName'), parameters('adxDatabaseName'), 'dc', tolower(parameters('tableNames')[copyIndex()]))]",
       "dependsOn": [
         "[resourceId('Microsoft.Kusto/clusters/databases', parameters('adxClusterName'), parameters('adxDatabaseName'))]",
         "[resourceId('Microsoft.Kusto/clusters/databases/scripts', parameters('adxClusterName'), parameters('adxDatabaseName'), 'adxScript')]"
@@ -137,17 +137,17 @@
       "kind": "EventHub",
       "copy": {
         "name": "eventhubs",
-        "count": "[length(parameters('eventHubNames'))]"
+        "count": "[length(parameters('tableNames'))]"
       },
       "properties": {
         "compression": "None",
         "databaseRouting": "Single",
         "consumerGroup": "$Default",
         "dataFormat": "MULTIJSON",
-        "eventHubResourceId": "[resourceId('Microsoft.EventHub/namespaces/eventhubs', parameters('eventHubNamespaceName'), parameters('eventHubNames')[copyIndex()])]",
+        "eventHubResourceId": "[resourceId('Microsoft.EventHub/namespaces/eventhubs', parameters('eventHubNamespaceName'), concat('insights-logs-advancedhunting-',toLower(parameters('tableNames')[copyIndex()])))]",
         "managedIdentityResourceId": "[resourceId('Microsoft.Kusto/clusters', parameters('adxClusterName'))]",
-        "mappingRuleName": "[concat(parameters('eventHubNames')[copyIndex()],'RawMapping')]",
-        "tableName": "[concat(parameters('eventHubNames')[copyIndex()],'Raw')]"
+        "mappingRuleName": "[concat(parameters('tableNames')[copyIndex()],'RawMapping')]",
+        "tableName": "[concat(parameters('tableNames')[copyIndex()],'Raw')]"
       }
     }
   ]

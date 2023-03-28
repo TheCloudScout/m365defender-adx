@@ -64,8 +64,8 @@ param (
 
 ### ADX details
 
-$eventHubNamespaceNamePrefix = "eh-defender-archive" # number-suffix will be added during deployment
-$adxClusterName = "adx-defender-archive"
+$eventHubNamespaceNamePrefix = "eh-securityarchive-prd-weeu" # number-suffix will be added during deployment
+$adxClusterName = "adx-m365darchive-prd01"
 $adxDatabaseName = "m365d-archive"
 $adxTableRetention = "365d"
 $adxTableRawRetention = "1d"
@@ -379,7 +379,6 @@ For ($count = 1; $count -le $eventHubNamespacesCount; $count++) {
         Write-Host "                     ! Switch 'noDeploy' was provided, skipping Azure deployment..." -ForegroundColor Magenta
     }
 }
-Write-Host ""
 
 ### Deploy Azure Data Explorer
 
@@ -387,16 +386,16 @@ For ($count = 1; $count -le $eventHubNamespacesCount; $count++) {
     $deploymentName = "DataExplorer-$(Get-Date -Format "yyyMMdd-HHmmss")"
     $eventHubNamespaceName = "$($eventHubNamespaceNamePrefix)-0$($count)"
     # Select ten tables for each Event Hub Namespace, make them lowercase and add prefix
-    $eventHubNames = $m365defenderTables.ToLower() | Select-Object -First 10 -Skip (($count - 1) * 10) | Foreach-Object { "insights-logs-advancedhunting-$_" }
+    $tableNames = $m365defenderTables | Select-Object -First 10 -Skip (($count - 1) * 10)
     
     if (1 -eq $count) {
-        Write-Host "                ─┰─ " -ForegroundColor Gray
+        Write-Host "                 ┃" -ForegroundColor Gray
         Write-Host "                 ┖─ Deploying Azure Data Explorer Cluster - '$($deploymentName)'..." -ForegroundColor Gray
         Write-Host "                     ┖─ ADX cluster name '$($adxClusterName)'" -ForegroundColor Gray
         Write-Host "                         ┖─ Database name '$($adxDatabaseName)'" -ForegroundColor Gray
     }
-    foreach($eventHubName in $eventHubNames) {
-        Write-Host "                             ┖─ Data Connection 'dc-$($eventHubName)'" -ForegroundColor Gray
+    foreach($tableName in $tableNames) {
+        Write-Host "                             ┖─ Data Connection 'dc-$($tableName)'" -ForegroundColor Gray
     }
 
     If (!$noDeploy) {
@@ -405,11 +404,11 @@ For ($count = 1; $count -le $eventHubNamespacesCount; $count++) {
                 -Name $deploymentName `
                 -ResourceGroupName $resourceGroupName `
                 -TemplateFile ./arm-templates/dataexplorer.template.json `
-                -adxClusterName $adxClusterName
-                -adxDatabaseName $adxDatabaseName
-                -adxScript $adxScript
+                -adxClusterName $adxClusterName `
+                -adxDatabaseName $adxDatabaseName `
+                -adxScript $adxScript `
                 -eventHubNamespaceName $eventHubNamespaceName `
-                -eventHubNames $eventHubNames
+                -tableNames $tableNames
             If ($deployment.ProvisioningState -eq "Succeeded") {
                 Write-Host "                      ✓ Deployment of '$($adxClusterName)' was successful" -ForegroundColor DarkGreen
                 Write-Host ""
@@ -430,12 +429,53 @@ For ($count = 1; $count -le $eventHubNamespacesCount; $count++) {
     }
 }
 
+### Set Managed Identity Permissions
 
+# Get ADX Cluster resourceId
+Write-Host "      ─┰─ " -ForegroundColor Gray
+Write-Host "       ┖─ Looking for ADX System-Assigned Managed Identity..." -ForegroundColor Gray
 
-# Set Managed Identity Permissions
+$azureRole          = "Azure Event Hubs Data Receiver"  
 
+try {
+    $adxResource        = Get-AzResource | Where-Object { $_.Name -eq "$adxClusterName" }
+    $managedIdentity    = (Get-AzResource -ResourceId $adxResource.ResourceId).Identity.PrincipalId
+    Write-Host "          ✓ Found Managed Identity with ID '$($managedIdentity)'" -ForegroundColor DarkGreen      
+} catch {
+    Write-Host ""
+    Write-Host "           ✘ There was a problem finding the Managed Identity! Exiting..." -ForegroundColor Red
+    exit
+}
 
+Write-Host ""
+Write-Host "           ┖─ Assigning role '$($azureRole)' to Resource Group '$($resourceGroupName)'..." -ForegroundColor Gray
 
+$paramHash = @{
+    ObjectId           = $managedIdentity
+    RoleDefinitionName = $AzureRole
+    ResourceGroupName  = $resourceGroupName
+    WarningAction      = 'SilentlyContinue'
+}
 
+# Check if role is already assigned to avoid errors
+try {
+    $RoleAssignment = Get-AzRoleAssignment @paramHash -ErrorAction stop
+} catch {
+    Write-Host ""
+    Write-Host "              ✘ An error occured while retrieving permissions for '$($managedIdentity)'. Check if Managed Identity is enabled within the Data Explorer cluster."
+}
+
+# Assign permissions to Managed Identities
+if ($null -eq $RoleAssignment) {
+    try {
+        $null = New-AzRoleAssignment @paramHash -ErrorAction stop
+        Write-Host "              ✓ Role '$($azureRole)' assigned" -ForegroundColor DarkGreen
+    } catch {
+        Write-Host ""
+        Write-Host "              ✘ An error occured while assigning '$($azureRole)' for '$($managedIdentity)' to '$($resourceGroupName)'."
+    }
+} else {
+    Write-Host "              ✓ Role '$($azureRole)' was already assigned" -ForegroundColor DarkGreen
+}
 
 Write-Host ""
