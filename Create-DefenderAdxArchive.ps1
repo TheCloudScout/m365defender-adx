@@ -325,13 +325,11 @@ if (!($skipPreReqChecks)) {
     try {
         $resourceProviderEventHubStatus = Get-AzResourceProvider -ProviderNamespace Microsoft.EventHub | Select-Object -ExpandProperty RegistrationState
         $resourceProviderKustoStatus = Get-AzResourceProvider -ProviderNamespace Microsoft.Kusto | Select-Object -ExpandProperty RegistrationState
-    }
-    catch {
+    } catch {
         try {
             $resourceProviderEventHubStatus = Get-AzResourceProvider -ProviderNamespace Microsoft.EventHub | Select-Object -ExpandProperty RegistrationState
             $resourceProviderKustoStatus = Get-AzResourceProvider -ProviderNamespace Microsoft.Kusto | Select-Object -ExpandProperty RegistrationState
-        }
-        catch {
+        } catch {
             Write-Host "              ✘ There were timeouts while retrieving the Azure resource provider statuses. Exiting..." -ForegroundColor Red
             Write-Host ""
             exit
@@ -403,8 +401,7 @@ For ($count = 1; $count -le $eventHubNamespacesCount; $count++) {
             } else {
                 Write-Host "                      ! There was an issue deploying '$($eventHubNamespaceName)' please check deployment '$($deployment.DeploymentName)'!" -ForegroundColor Yellow
             }
-        }
-        catch {
+        } catch {
             Write-Host ""
             Write-Host "                     ✘ There was a problem deploying to Azure! Exiting..." -ForegroundColor Red
             Write-Host ""
@@ -448,19 +445,16 @@ For ($count = 1; $count -le $eventHubNamespacesCount; $count++) {
             If ($deployment.ProvisioningState -eq "Succeeded") {
                 Write-Host "                      ✓ Deployment of '$($adxClusterName)' was successful" -ForegroundColor DarkGreen
                 Write-Host ""
-            }
-            else {
+            } else {
                 Write-Host "                      ! There was an issue deploying '$($adxClusterName)' please check deployment '$($deployment.DeploymentName)'!" -ForegroundColor Yellow
             }
-        }
-        catch {
+        } catch {
             Write-Host ""
             Write-Host "                     ✘ There was a problem deploying to Azure! Exiting..." -ForegroundColor Red
             Write-Host ""
             exit
         }
-    }
-    else {
+    } else {
         Write-Host "                     ! Switch 'noDeploy' was provided, skipping Azure deployment..." -ForegroundColor Magenta
     }
 }
