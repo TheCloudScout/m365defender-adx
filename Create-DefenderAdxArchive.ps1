@@ -398,12 +398,12 @@ For ($count = 1; $count -le $eventHubNamespacesCount; $count++) {
 
     If (!$noDeploy) {
         try {
-            # $deployment = New-AzResourceGroupDeployment `
-            #     -Name $deploymentName `
-            #     -ResourceGroupName $resourceGroupName `
-            #     -TemplateFile ./arm-templates/eventhub.template.json `
-            #     -eventHubNamespaceName $eventHubNamespaceName `
-            #     -eventHubNames $eventHubNames
+            $deployment = New-AzResourceGroupDeployment `
+                -Name $deploymentName `
+                -ResourceGroupName $resourceGroupName `
+                -TemplateFile ./arm-templates/eventhub.template.json `
+                -eventHubNamespaceName $eventHubNamespaceName `
+                -eventHubNames $eventHubNames
             If ($deployment.ProvisioningState -eq "Succeeded") {
                 Write-Host "                      ✓ Deployment of '$($eventHubNamespaceName)' was successful" -ForegroundColor DarkGreen
                 Write-Host ""
@@ -444,15 +444,15 @@ For ($count = 1; $count -le $eventHubNamespacesCount; $count++) {
 
     If (!$noDeploy) {
         try {
-            # $deployment = New-AzResourceGroupDeployment `
-            #     -Name $deploymentName `
-            #     -ResourceGroupName $resourceGroupName `
-            #     -TemplateFile ./arm-templates/dataexplorer.template.json `
-            #     -adxClusterName $adxClusterName `
-            #     -adxDatabaseName $adxDatabaseName `
-            #     -adxScript $adxScript `
-            #     -eventHubNamespaceName $eventHubNamespaceName `
-            #     -tableNames $tableNames
+            $deployment = New-AzResourceGroupDeployment `
+                -Name $deploymentName `
+                -ResourceGroupName $resourceGroupName `
+                -TemplateFile ./arm-templates/dataexplorer.template.json `
+                -adxClusterName $adxClusterName `
+                -adxDatabaseName $adxDatabaseName `
+                -adxScript $adxScript `
+                -eventHubNamespaceName $eventHubNamespaceName `
+                -tableNames $tableNames
             If ($deployment.ProvisioningState -eq "Succeeded") {
                 Write-Host "                      ✓ Deployment of '$($adxClusterName)' was successful" -ForegroundColor DarkGreen
                 Write-Host ""
