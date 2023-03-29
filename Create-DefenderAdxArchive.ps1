@@ -74,19 +74,22 @@ param (
 
 ### ADX details
 
-$eventHubNamespaceNamePrefix = "eh-defender-archive" # number-suffix will be added during deployment
-$adxClusterName = "adx-defender-archive"
-$adxDatabaseName = "m365d-archive"
-$adxTableRetention = "365d"
-$adxTableRawRetention = "1d"
-$adxScript = ""
-$adxScriptFile = "adxScript.kusto"
+$eventHubNamespaceNamePrefix    = "eh-defender-archive"     # number-suffix will be added during deployment
+$adxClusterName                 = "adx-defender-archive"    # Cannot exceed 22 characters!
+$adxDatabaseName                = "m365d-archive"
+$adxDatabasePermissionsRole     = "viewers"
+$adxDatabasePermissionsTenant   = "AholdDelhaize.com"
+$adxDatabasePermissionsGroup    = "cld-aleu-gsotech-sub-read-prd-isosecurity-01"
+$adxTableRetention              = "365d"
+$adxTableRawRetention           = "1d"
+$adxScript                      = ""
+$adxScriptFile                  = "adxScript.kusto"
 
 ### M365Defender details
 
-$query = " | getschema | project ColumnName, ColumnType"
+$query                          = " | getschema | project ColumnName, ColumnType"
 # Supported tables for streaming to Event Hub as of time of writing. Update accordingly if applicable
-$m365defenderSupportedTables = @(
+$m365defenderSupportedTables    = @(
     "AlertInfo",
     "AlertEvidence",
     "DeviceInfo",
@@ -194,18 +197,18 @@ If (!($useAdxScriptFile)) {
             Write-Host ""
             exit
         }
-        $response = $webResponse | ConvertFrom-Json
-        $results = $response.Results
-        $tableSchema = $response.Schema
+        $response               = $webResponse | ConvertFrom-Json
+        $results                = $response.Results
+        $tableSchema            = $response.Schema
 
         # Create ADX commands script
 
-        $tableExpandFunction = $tableName + 'Expand'
-        $tableRaw = $tableName + 'Raw'
-        $rawMapping = $tableRaw + 'Mapping'
+        $tableExpandFunction    = $tableName + 'Expand'
+        $tableRaw               = $tableName + 'Raw'
+        $rawMapping             = $tableRaw + 'Mapping'
 
-        $tableColumns = @()
-        $expandColumns = @()
+        $tableColumns           = @()
+        $expandColumns          = @()
 
         # Make sure dataType functions (tostring(), tobool(), tolong() etc.) are added
 
@@ -221,12 +224,12 @@ If (!($useAdxScriptFile)) {
 
         # Create ADX commands
 
-        $createRawTable = '.create table {0} (records:dynamic)' -f $tableRaw
+        $createRawTable = '.create-or-alter table {0} (records:dynamic)' -f $tableRaw
         $CreateRawMapping = @'
-.create table {0} ingestion json mapping '{1}' '[{{"Column":"records","Properties":{{"path":"$.records"}}}}]'
+.create-or-alter table {0} ingestion json mapping '{1}' '[{{"Column":"records","Properties":{{"path":"$.records"}}}}]'
 '@ -f $TableRaw, $RawMapping
         $createRawTableRetention = '.alter-merge table {0} policy retention softdelete = {1}' -f $tableRaw, $adxTableRawRetention
-        $createTable = '.create table {0} ({1})' -f $tableName, $tableSchema
+        $createTable = '.create-or-alter table {0} ({1})' -f $tableName, $tableSchema
         $createTableRetention = '.alter-merge table {0} policy retention softdelete = {1} recoverability = enabled' -f $tableName, $adxTableRetention
         $createFunction = @'
 .create-or-alter function {0} {{{1} | mv-expand events = records | project {2} }}
@@ -248,6 +251,11 @@ If (!($useAdxScriptFile)) {
         $adxScript = $adxScript + "`n$createPolicyUpdate`n"
     }
 
+    # Add ADX database permissions
+    $createTablePermissions = ".add database ['{0}'] {1} ('aadgroup={2};{3}')" -f $adxDatabaseName, $adxDatabasePermissionsRole, $adxDatabasePermissionsGroup, $adxDatabasePermissionsTenant
+    $adxScript = $adxScript + "`n$createTablePermissions`n"
+
+    # Add empty line at end
     $adxScript = $adxScript + "`n"
 
     # Display ADX script (optional depending on outputAdxScript switch)
@@ -324,11 +332,11 @@ if (!($skipPreReqChecks)) {
 
     try {
         $resourceProviderEventHubStatus = Get-AzResourceProvider -ProviderNamespace Microsoft.EventHub | Select-Object -ExpandProperty RegistrationState
-        $resourceProviderKustoStatus = Get-AzResourceProvider -ProviderNamespace Microsoft.Kusto | Select-Object -ExpandProperty RegistrationState
+        $resourceProviderKustoStatus    = Get-AzResourceProvider -ProviderNamespace Microsoft.Kusto | Select-Object -ExpandProperty RegistrationState
     } catch {
         try {
             $resourceProviderEventHubStatus = Get-AzResourceProvider -ProviderNamespace Microsoft.EventHub | Select-Object -ExpandProperty RegistrationState
-            $resourceProviderKustoStatus = Get-AzResourceProvider -ProviderNamespace Microsoft.Kusto | Select-Object -ExpandProperty RegistrationState
+            $resourceProviderKustoStatus    = Get-AzResourceProvider -ProviderNamespace Microsoft.Kusto | Select-Object -ExpandProperty RegistrationState
         } catch {
             Write-Host "              ✘ There were timeouts while retrieving the Azure resource provider statuses. Exiting..." -ForegroundColor Red
             Write-Host ""
@@ -369,8 +377,8 @@ $eventHubNamespacesCount = [int][math]::ceiling($m365defenderTables.Count / 10)
 Write-Host "              ✓ In order to create $($m365defenderTables.Count) Event Hubs, we'll be needing $($eventHubNamespacesCount) Event Hub Namespaces." -ForegroundColor DarkGreen
 
 For ($count = 1; $count -le $eventHubNamespacesCount; $count++) {
-    $deploymentName = "EventHubNamespace-$(Get-Date -Format "yyyMMdd-HHmmss")"
-    $eventHubNamespaceName = "$($eventHubNamespaceNamePrefix)-0$($count)"
+    $deploymentName         = "EventHubNamespace-$(Get-Date -Format "yyyMMdd-HHmmss")"
+    $eventHubNamespaceName  = "$($eventHubNamespaceNamePrefix)-0$($count)"
     # Select ten tables for each Event Hub Namespace, make them lowercase and add prefix
     $eventHubNames = $m365defenderTables.ToLower() | Select-Object -First 10 -Skip (($count - 1) * 10) | Foreach-Object { "insights-logs-advancedhunting-$_" }
     
@@ -416,8 +424,8 @@ For ($count = 1; $count -le $eventHubNamespacesCount; $count++) {
 ### Deploy Azure Data Explorer
 
 For ($count = 1; $count -le $eventHubNamespacesCount; $count++) {
-    $deploymentName = "DataExplorer-$(Get-Date -Format "yyyMMdd-HHmmss")"
-    $eventHubNamespaceName = "$($eventHubNamespaceNamePrefix)-0$($count)"
+    $deploymentName         = "DataExplorer-$(Get-Date -Format "yyyMMdd-HHmmss")"
+    $eventHubNamespaceName  = "$($eventHubNamespaceNamePrefix)-0$($count)"
     # Select ten tables for each Event Hub Namespace, make them lowercase and add prefix
     $tableNames = $m365defenderTables | Select-Object -First 10 -Skip (($count - 1) * 10)
     
