@@ -1,7 +1,7 @@
 
 .create table AlertInfoRaw (records:dynamic)
 
-.create table AlertInfoRaw ingestion json mapping 'AlertInfoRawMapping' '[{"Column":"records","Properties":{"path":"$.records"}}]'
+.create-or-alter table AlertInfoRaw ingestion json mapping 'AlertInfoRawMapping' '[{"Column":"records","Properties":{"path":"$.records"}}]'
 
 .alter-merge table AlertInfoRaw policy retention softdelete = 1d
 
@@ -15,7 +15,7 @@
 
 .create table AlertEvidenceRaw (records:dynamic)
 
-.create table AlertEvidenceRaw ingestion json mapping 'AlertEvidenceRawMapping' '[{"Column":"records","Properties":{"path":"$.records"}}]'
+.create-or-alter table AlertEvidenceRaw ingestion json mapping 'AlertEvidenceRawMapping' '[{"Column":"records","Properties":{"path":"$.records"}}]'
 
 .alter-merge table AlertEvidenceRaw policy retention softdelete = 1d
 
@@ -29,7 +29,7 @@
 
 .create table DeviceInfoRaw (records:dynamic)
 
-.create table DeviceInfoRaw ingestion json mapping 'DeviceInfoRawMapping' '[{"Column":"records","Properties":{"path":"$.records"}}]'
+.create-or-alter table DeviceInfoRaw ingestion json mapping 'DeviceInfoRawMapping' '[{"Column":"records","Properties":{"path":"$.records"}}]'
 
 .alter-merge table DeviceInfoRaw policy retention softdelete = 1d
 
@@ -43,7 +43,7 @@
 
 .create table DeviceNetworkInfoRaw (records:dynamic)
 
-.create table DeviceNetworkInfoRaw ingestion json mapping 'DeviceNetworkInfoRawMapping' '[{"Column":"records","Properties":{"path":"$.records"}}]'
+.create-or-alter table DeviceNetworkInfoRaw ingestion json mapping 'DeviceNetworkInfoRawMapping' '[{"Column":"records","Properties":{"path":"$.records"}}]'
 
 .alter-merge table DeviceNetworkInfoRaw policy retention softdelete = 1d
 
@@ -57,7 +57,7 @@
 
 .create table DeviceProcessEventsRaw (records:dynamic)
 
-.create table DeviceProcessEventsRaw ingestion json mapping 'DeviceProcessEventsRawMapping' '[{"Column":"records","Properties":{"path":"$.records"}}]'
+.create-or-alter table DeviceProcessEventsRaw ingestion json mapping 'DeviceProcessEventsRawMapping' '[{"Column":"records","Properties":{"path":"$.records"}}]'
 
 .alter-merge table DeviceProcessEventsRaw policy retention softdelete = 1d
 
@@ -71,7 +71,7 @@
 
 .create table DeviceNetworkEventsRaw (records:dynamic)
 
-.create table DeviceNetworkEventsRaw ingestion json mapping 'DeviceNetworkEventsRawMapping' '[{"Column":"records","Properties":{"path":"$.records"}}]'
+.create-or-alter table DeviceNetworkEventsRaw ingestion json mapping 'DeviceNetworkEventsRawMapping' '[{"Column":"records","Properties":{"path":"$.records"}}]'
 
 .alter-merge table DeviceNetworkEventsRaw policy retention softdelete = 1d
 
@@ -85,7 +85,7 @@
 
 .create table DeviceFileEventsRaw (records:dynamic)
 
-.create table DeviceFileEventsRaw ingestion json mapping 'DeviceFileEventsRawMapping' '[{"Column":"records","Properties":{"path":"$.records"}}]'
+.create-or-alter table DeviceFileEventsRaw ingestion json mapping 'DeviceFileEventsRawMapping' '[{"Column":"records","Properties":{"path":"$.records"}}]'
 
 .alter-merge table DeviceFileEventsRaw policy retention softdelete = 1d
 
@@ -99,7 +99,7 @@
 
 .create table DeviceRegistryEventsRaw (records:dynamic)
 
-.create table DeviceRegistryEventsRaw ingestion json mapping 'DeviceRegistryEventsRawMapping' '[{"Column":"records","Properties":{"path":"$.records"}}]'
+.create-or-alter table DeviceRegistryEventsRaw ingestion json mapping 'DeviceRegistryEventsRawMapping' '[{"Column":"records","Properties":{"path":"$.records"}}]'
 
 .alter-merge table DeviceRegistryEventsRaw policy retention softdelete = 1d
 
@@ -113,7 +113,7 @@
 
 .create table DeviceLogonEventsRaw (records:dynamic)
 
-.create table DeviceLogonEventsRaw ingestion json mapping 'DeviceLogonEventsRawMapping' '[{"Column":"records","Properties":{"path":"$.records"}}]'
+.create-or-alter table DeviceLogonEventsRaw ingestion json mapping 'DeviceLogonEventsRawMapping' '[{"Column":"records","Properties":{"path":"$.records"}}]'
 
 .alter-merge table DeviceLogonEventsRaw policy retention softdelete = 1d
 
@@ -127,7 +127,7 @@
 
 .create table DeviceImageLoadEventsRaw (records:dynamic)
 
-.create table DeviceImageLoadEventsRaw ingestion json mapping 'DeviceImageLoadEventsRawMapping' '[{"Column":"records","Properties":{"path":"$.records"}}]'
+.create-or-alter table DeviceImageLoadEventsRaw ingestion json mapping 'DeviceImageLoadEventsRawMapping' '[{"Column":"records","Properties":{"path":"$.records"}}]'
 
 .alter-merge table DeviceImageLoadEventsRaw policy retention softdelete = 1d
 
@@ -141,7 +141,7 @@
 
 .create table DeviceEventsRaw (records:dynamic)
 
-.create table DeviceEventsRaw ingestion json mapping 'DeviceEventsRawMapping' '[{"Column":"records","Properties":{"path":"$.records"}}]'
+.create-or-alter table DeviceEventsRaw ingestion json mapping 'DeviceEventsRawMapping' '[{"Column":"records","Properties":{"path":"$.records"}}]'
 
 .alter-merge table DeviceEventsRaw policy retention softdelete = 1d
 
@@ -155,7 +155,7 @@
 
 .create table DeviceFileCertificateInfoRaw (records:dynamic)
 
-.create table DeviceFileCertificateInfoRaw ingestion json mapping 'DeviceFileCertificateInfoRawMapping' '[{"Column":"records","Properties":{"path":"$.records"}}]'
+.create-or-alter table DeviceFileCertificateInfoRaw ingestion json mapping 'DeviceFileCertificateInfoRawMapping' '[{"Column":"records","Properties":{"path":"$.records"}}]'
 
 .alter-merge table DeviceFileCertificateInfoRaw policy retention softdelete = 1d
 
@@ -169,7 +169,7 @@
 
 .create table EmailAttachmentInfoRaw (records:dynamic)
 
-.create table EmailAttachmentInfoRaw ingestion json mapping 'EmailAttachmentInfoRawMapping' '[{"Column":"records","Properties":{"path":"$.records"}}]'
+.create-or-alter table EmailAttachmentInfoRaw ingestion json mapping 'EmailAttachmentInfoRawMapping' '[{"Column":"records","Properties":{"path":"$.records"}}]'
 
 .alter-merge table EmailAttachmentInfoRaw policy retention softdelete = 1d
 
@@ -183,7 +183,7 @@
 
 .create table EmailEventsRaw (records:dynamic)
 
-.create table EmailEventsRaw ingestion json mapping 'EmailEventsRawMapping' '[{"Column":"records","Properties":{"path":"$.records"}}]'
+.create-or-alter table EmailEventsRaw ingestion json mapping 'EmailEventsRawMapping' '[{"Column":"records","Properties":{"path":"$.records"}}]'
 
 .alter-merge table EmailEventsRaw policy retention softdelete = 1d
 
@@ -197,7 +197,7 @@
 
 .create table EmailPostDeliveryEventsRaw (records:dynamic)
 
-.create table EmailPostDeliveryEventsRaw ingestion json mapping 'EmailPostDeliveryEventsRawMapping' '[{"Column":"records","Properties":{"path":"$.records"}}]'
+.create-or-alter table EmailPostDeliveryEventsRaw ingestion json mapping 'EmailPostDeliveryEventsRawMapping' '[{"Column":"records","Properties":{"path":"$.records"}}]'
 
 .alter-merge table EmailPostDeliveryEventsRaw policy retention softdelete = 1d
 
@@ -211,7 +211,7 @@
 
 .create table EmailUrlInfoRaw (records:dynamic)
 
-.create table EmailUrlInfoRaw ingestion json mapping 'EmailUrlInfoRawMapping' '[{"Column":"records","Properties":{"path":"$.records"}}]'
+.create-or-alter table EmailUrlInfoRaw ingestion json mapping 'EmailUrlInfoRawMapping' '[{"Column":"records","Properties":{"path":"$.records"}}]'
 
 .alter-merge table EmailUrlInfoRaw policy retention softdelete = 1d
 
@@ -225,7 +225,7 @@
 
 .create table UrlClickEventsRaw (records:dynamic)
 
-.create table UrlClickEventsRaw ingestion json mapping 'UrlClickEventsRawMapping' '[{"Column":"records","Properties":{"path":"$.records"}}]'
+.create-or-alter table UrlClickEventsRaw ingestion json mapping 'UrlClickEventsRawMapping' '[{"Column":"records","Properties":{"path":"$.records"}}]'
 
 .alter-merge table UrlClickEventsRaw policy retention softdelete = 1d
 
@@ -239,7 +239,7 @@
 
 .create table IdentityLogonEventsRaw (records:dynamic)
 
-.create table IdentityLogonEventsRaw ingestion json mapping 'IdentityLogonEventsRawMapping' '[{"Column":"records","Properties":{"path":"$.records"}}]'
+.create-or-alter table IdentityLogonEventsRaw ingestion json mapping 'IdentityLogonEventsRawMapping' '[{"Column":"records","Properties":{"path":"$.records"}}]'
 
 .alter-merge table IdentityLogonEventsRaw policy retention softdelete = 1d
 
@@ -253,7 +253,7 @@
 
 .create table IdentityQueryEventsRaw (records:dynamic)
 
-.create table IdentityQueryEventsRaw ingestion json mapping 'IdentityQueryEventsRawMapping' '[{"Column":"records","Properties":{"path":"$.records"}}]'
+.create-or-alter table IdentityQueryEventsRaw ingestion json mapping 'IdentityQueryEventsRawMapping' '[{"Column":"records","Properties":{"path":"$.records"}}]'
 
 .alter-merge table IdentityQueryEventsRaw policy retention softdelete = 1d
 
@@ -267,7 +267,7 @@
 
 .create table IdentityDirectoryEventsRaw (records:dynamic)
 
-.create table IdentityDirectoryEventsRaw ingestion json mapping 'IdentityDirectoryEventsRawMapping' '[{"Column":"records","Properties":{"path":"$.records"}}]'
+.create-or-alter table IdentityDirectoryEventsRaw ingestion json mapping 'IdentityDirectoryEventsRawMapping' '[{"Column":"records","Properties":{"path":"$.records"}}]'
 
 .alter-merge table IdentityDirectoryEventsRaw policy retention softdelete = 1d
 
@@ -281,7 +281,7 @@
 
 .create table CloudAppEventsRaw (records:dynamic)
 
-.create table CloudAppEventsRaw ingestion json mapping 'CloudAppEventsRawMapping' '[{"Column":"records","Properties":{"path":"$.records"}}]'
+.create-or-alter table CloudAppEventsRaw ingestion json mapping 'CloudAppEventsRawMapping' '[{"Column":"records","Properties":{"path":"$.records"}}]'
 
 .alter-merge table CloudAppEventsRaw policy retention softdelete = 1d
 
@@ -292,5 +292,7 @@
 .create-or-alter function CloudAppEventsExpand {CloudAppEventsRaw | mv-expand events = records | project Timestamp = todatetime(events.properties.Timestamp),ActionType = tostring(events.properties.ActionType),Application = tostring(events.properties.Application),ApplicationId = toint(events.properties.ApplicationId),AppInstanceId = toint(events.properties.AppInstanceId),AccountObjectId = tostring(events.properties.AccountObjectId),AccountId = tostring(events.properties.AccountId),AccountDisplayName = tostring(events.properties.AccountDisplayName),IsAdminOperation = tobool(events.properties.IsAdminOperation),DeviceType = tostring(events.properties.DeviceType),OSPlatform = tostring(events.properties.OSPlatform),IPAddress = tostring(events.properties.IPAddress),IsAnonymousProxy = tobool(events.properties.IsAnonymousProxy),CountryCode = tostring(events.properties.CountryCode),City = tostring(events.properties.City),ISP = tostring(events.properties.ISP),UserAgent = tostring(events.properties.UserAgent),ActivityType = tostring(events.properties.ActivityType),ActivityObjects = todynamic(events.properties.ActivityObjects),ObjectName = tostring(events.properties.ObjectName),ObjectType = tostring(events.properties.ObjectType),ObjectId = tostring(events.properties.ObjectId),ReportId = tostring(events.properties.ReportId),AccountType = tostring(events.properties.AccountType),IsExternalUser = tobool(events.properties.IsExternalUser),IsImpersonated = tobool(events.properties.IsImpersonated),IPTags = todynamic(events.properties.IPTags),IPCategory = tostring(events.properties.IPCategory),UserAgentTags = todynamic(events.properties.UserAgentTags),RawEventData = todynamic(events.properties.RawEventData),AdditionalFields = todynamic(events.properties.AdditionalFields) }
 
 .alter table CloudAppEvents policy update @'[{"Source": "CloudAppEventsRaw", "Query": "CloudAppEventsExpand()", "IsEnabled": "True", "IsTransactional": true}]'
+
+.add database ['m365d-archive'] viewers ('aadgroup=SQN Admin Accounts;sqn.international')
 
 

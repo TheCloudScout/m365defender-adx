@@ -1,12 +1,8 @@
 <#
 .DESCRIPTION
     Permission requirements:
-    - Azure AD: Application needs to be owner of it's own application.
-    - Azure AD: Application requires the application permission Application.ReadWrite.OwnedBy.
-
-    Run Add-AppOwner.ps1 separately for one-time setup of proper permissions on your application.
-
-    https://docs.microsoft.com/en-us/graph/api/resources/application?view-graph-rest-1.0
+    - Azure AD Application needs ThreatHunting.Read.All on Microsoft Graph.
+    - User running this script should be Owner, or both contributor and User Access Administrator, on the Azure subscription.
 
     .PARAMETER tenantId [string]
     The Tenant ID of the Azure Active Directory in which the app registration and Azure subscription resides.
@@ -20,17 +16,19 @@
     Name of resource group in which archive resources should be deployed.
     .PARAMETER m365defenderTables [string]
     Single line string and comma-sepparated list of tables you want to setup an archive for. Keep in mind to user proper PascalCase for table names!
-    If none provided, this solution will use all tables supported by streaming API and will setup archival on al of them.
+    If parameter is not provided, this solution will use all tables supported by streaming API and will setup archival on all of them.
     .PARAMETER outputAdxScript [switch]
     Used for debugging purposes so that the script will output the ADX script on screen before it gets passed into the deployments.
     .PARAMETER saveAdxScript [switch]
-    Set $true to write content of AdxScript to 'adxScript.kusto' file. File can be re-used with -useAdxScript parameter.
+    User -savedAdxScript to write content of $adxScript to 'adxScript.kusto' file. File can be re-used with -useAdxScript parameter.
     .PARAMETER useAdxScriptFile [string]
     Provide path to existing 'adxScript.kusto' file created by -saveAdxScript parameter.
     .PARAMETER skipPreReqChecks [switch]
-    Skip Azure subscription checks like enabled resource providers and permissions. Useful when using this script in a pipeline where you're already sure of these prerequisites.
+    Skip Azure subscription checks like checking enabled resource providers and current permissions. Useful when using this script in a pipeline where you're already sure of these prerequisites.
     .PARAMETER noDeploy [switch]
     Used for debugging purposes so that the actual Azure deployment steps are skipped.
+    .PARAMETER deploySentinelFunctions [switch]
+    Use -deploySentinelFunctions to add optional step to the deployment process where (Sentinel) workspace functions are deployed (savedSearches) to be able to query ADX from Log Analytics / Sentinel UI.
 
 #>
 
@@ -76,12 +74,12 @@ param (
 
 ### Environment specific variables
 
-$eventHubNamespaceNamePrefix    = "eh-defender-archive"     # number-suffix will be added during deployment
+$eventHubNamespaceNamePrefix    = "eh-defender-archive"     # number-suffix ('-01', '-02', '-03') will be added during deployment
 $adxClusterName                 = "adx-defender-archive"    # Cannot exceed 22 characters!
 $adxDatabaseName                = "m365d-archive"
 $adxDatabasePermissionsRole     = "viewers"
-$adxDatabasePermissionsTenant   = "AholdDelhaize.com"
-$adxDatabasePermissionsGroup    = "cld-aleu-gsotech-sub-read-prd-isosecurity-01"
+$adxDatabasePermissionsTenant   = "sqn.international"
+$adxDatabasePermissionsGroup    = "SQN Admin Accounts"
 $adxTableRetention              = "365d"
 $adxTableRawRetention           = "1d"
 $adxScript                      = ""
@@ -142,13 +140,23 @@ If ($m365defenderTables) {
 
 Clear-Host
 
+Write-Host "                                                                   "
+Write-Host "          Microsoft 365 Defender                                   " -ForegroundColor DarkBlue
+Write-Host "        _______             ______ _____            ________       " -ForegroundColor DarkGreen
+Write-Host "       ____    |_______________  /____(_)__   _________  __ \      " -ForegroundColor DarkGreen
+Write-Host "     _____  /| |_  ___/  ___/_  __ \_  /__ | / /  _ \_  /_/ /      " -ForegroundColor DarkGreen
+Write-Host "    _____  ___ |  /   / /__ _  / / /  / __ |/ //  __/  _, _/       " -ForegroundColor DarkGreen
+Write-Host "   _____/_/  |_/_/    \___/ /_/ /_//_/  _____/ \___//_/ |_|        " -ForegroundColor DarkGreen
+Write-Host "                                                                   " -ForegroundColor DarkGreen
+Write-Host "                _ AZURE DATA EXPLORER EDiTION _                    " -ForegroundColor DarkGray
+Write-Host "                                                                   "
+
 ### Construct AdxScript with all ADX commands for appropriate tables and schemas
 
 If (!($useAdxScriptFile)) {
 
     # Get AAD authorization token
 
-    Write-Host ""
     Write-Host "   ▲ Getting access token from api.securitycenter.microsoft.com..." -ForegroundColor Cyan
 
     $scope = 'https://graph.microsoft.com/.default'
@@ -172,10 +180,10 @@ If (!($useAdxScriptFile)) {
 
     # Output all tables that will be processed for schema query
 
-    Write-Host "      ─┰─ " -ForegroundColor DarkGray
-    Write-Host "       ┖─ The folowwing tables will be processed from Microsoft 365 Defender:" -ForegroundColor DarkGray
+    Write-Host "      ─┰─ " -ForegroundColor Gray
+    Write-Host "       ┖─ The folowwing tables will be processed from Microsoft 365 Defender:" -ForegroundColor Gray
     foreach ($table in $m365defenderTables) {
-        Write-Host "             - $($table)" -ForegroundColor DarkGray
+        Write-Host "             - $($table)" -ForegroundColor Gray
     }
 
     # Loop through all m365d tables, query schema and construct ADX script variable
@@ -183,7 +191,7 @@ If (!($useAdxScriptFile)) {
     foreach ($tableName in $m365defenderTables) {
 
         # Query schema @ AdvancedHunting API
-        Write-Host "       ┖─ Querying schema for '$($tableName)' @ AdvancedHunting API..." -ForegroundColor DarkGray
+        Write-Host "       ┖─ Querying schema for '$($tableName)' @ AdvancedHunting API..." -ForegroundColor Gray
 
         $body = ConvertTo-Json -InputObject @{ 'Query' = $tableName + $query }
         
@@ -245,7 +253,7 @@ If (!($useAdxScriptFile)) {
 
         # Write ADX commands to ADX script variable
 
-        Write-Host "           ┖─ Adding ADX commands for $($tableName) to ADX script..." -ForegroundColor DarkGray
+        Write-Host "           ┖─ Adding ADX commands for $($tableName) to ADX script..." -ForegroundColor Gray
 
         $adxScript = $adxScript + "`n$createRawTable`n"
         $adxScript = $adxScript + "`n$createRawMapping`n"
@@ -305,7 +313,6 @@ If (!($useAdxScriptFile)) {
 # Sign-in to Azure
 Write-Host ""
 Write-Host "   ▲ Signing in to Azure..." -ForegroundColor Cyan
-Write-Host ""
 
 # Check if already connected to Azure
 if(!(Get-AzContext)) {
@@ -314,8 +321,8 @@ if(!(Get-AzContext)) {
 }
 
 # Check Azure prerequisites or skip is -skipPreReqChecks was used
-Write-Host "      ─┰─ " -ForegroundColor DarkGray
-Write-Host "       ┖─ Checking if role assignment prerequisites are met..." -ForegroundColor DarkGray
+Write-Host "      ─┰─ " -ForegroundColor Gray
+Write-Host "       ┖─ Checking if role assignment prerequisites are met..." -ForegroundColor Gray
 if (!($skipPreReqChecks)) {
 
     $assignedRoles = Get-AzRoleAssignment | Select-Object RoleDefinitionName -ExpandProperty RoleDefinitionName 
@@ -330,8 +337,8 @@ if (!($skipPreReqChecks)) {
     Write-Host "              ✓ Role assignment prerequisites are setup correctly" -ForegroundColor DarkGreen
 
     # Check if required Azure resource providers are registered
-    Write-Host "       ┃" -ForegroundColor DarkGray
-    Write-Host "       ┖─ Checking if Azure resource providers are registered..." -ForegroundColor DarkGray
+    Write-Host "       ┃" -ForegroundColor Gray
+    Write-Host "       ┖─ Checking if Azure resource providers are registered..." -ForegroundColor Gray
 
     try {
         $resourceProviderEventHubStatus = Get-AzResourceProvider -ProviderNamespace Microsoft.EventHub | Select-Object -ExpandProperty RegistrationState
@@ -373,8 +380,8 @@ if (!($skipPreReqChecks)) {
 ### Deploy Azure Event Hub(s)
 
 # Since we can only deply 10 Event Hubs per Event Hub Namespace, we need to determine how many Event Hub Namespaces we'll be needing
-Write-Host "       ┃" -ForegroundColor DarkGray
-Write-Host "       ┖─ Calculating the amount of Event Hub Namespaces needed..." -ForegroundColor DarkGray
+Write-Host "       ┃" -ForegroundColor Gray
+Write-Host "       ┖─ Calculating the amount of Event Hub Namespaces needed..." -ForegroundColor Gray
 
 $eventHubNamespacesCount = [int][math]::ceiling($m365defenderTables.Count / 10) 
 Write-Host "              ✓ In order to create $($m365defenderTables.Count) Event Hubs, we'll be needing $($eventHubNamespacesCount) Event Hub Namespaces." -ForegroundColor DarkGreen
@@ -386,14 +393,14 @@ For ($count = 1; $count -le $eventHubNamespacesCount; $count++) {
     $eventHubNames = $m365defenderTables.ToLower() | Select-Object -First 10 -Skip (($count - 1) * 10) | Foreach-Object { "insights-logs-advancedhunting-$_" }
     
     if (1 -eq $count) {
-        Write-Host "                ─┰─ " -ForegroundColor DarkGray
+        Write-Host "                ─┰─ " -ForegroundColor Gray
     } else {
-        Write-Host "                 ┃" -ForegroundColor DarkGray
+        Write-Host "                 ┃" -ForegroundColor Gray
     }
-    Write-Host "                 ┖─ Deploying Event Hub Namespace [ $($count) / $($eventHubNamespacesCount) ] - '$($deploymentName)'..." -ForegroundColor DarkGray
-    Write-Host "                     ┖─ Event Hub Namespace '$($eventHubNamespaceName)'" -ForegroundColor DarkGray
+    Write-Host "                 ┖─ Deploying Event Hub Namespace [ $($count) / $($eventHubNamespacesCount) ] - '$($deploymentName)'..." -ForegroundColor Gray
+    Write-Host "                     ┖─ Event Hub Namespace '$($eventHubNamespaceName)'" -ForegroundColor Gray
     foreach ($eventHubName in $eventHubNames) {
-        Write-Host "                         ┖─ Event Hub '$($eventHubName)'" -ForegroundColor DarkGray
+        Write-Host "                         ┖─ Event Hub '$($eventHubName)'" -ForegroundColor Gray
     }
 
     If (!$noDeploy) {
@@ -433,13 +440,13 @@ For ($count = 1; $count -le $eventHubNamespacesCount; $count++) {
     $tableNames = $m365defenderTables | Select-Object -First 10 -Skip (($count - 1) * 10)
     
     if (1 -eq $count) {
-        Write-Host "                 ┃" -ForegroundColor DarkGray
-        Write-Host "                 ┖─ Deploying Azure Data Explorer Cluster - '$($deploymentName)'..." -ForegroundColor DarkGray
-        Write-Host "                     ┖─ ADX cluster name '$($adxClusterName)'" -ForegroundColor DarkGray
-        Write-Host "                         ┖─ Database name '$($adxDatabaseName)'" -ForegroundColor DarkGray
+        Write-Host "                 ┃" -ForegroundColor Gray
+        Write-Host "                 ┖─ Deploying Azure Data Explorer Cluster - '$($deploymentName)'..." -ForegroundColor Gray
+        Write-Host "                     ┖─ ADX cluster name '$($adxClusterName)'" -ForegroundColor Gray
+        Write-Host "                         ┖─ Database name '$($adxDatabaseName)'" -ForegroundColor Gray
     }
     foreach($tableName in $tableNames) {
-        Write-Host "                             ┖─ Data Connection 'dc-$($tableName)'" -ForegroundColor DarkGray
+        Write-Host "                             ┖─ Data Connection 'dc-$($tableName)'" -ForegroundColor Gray
     }
 
     If (!$noDeploy) {
@@ -473,8 +480,8 @@ For ($count = 1; $count -le $eventHubNamespacesCount; $count++) {
 ### Set Managed Identity Permissions
 
 # Get ADX Cluster resourceId
-Write-Host "      ─┰─ " -ForegroundColor DarkGray
-Write-Host "       ┖─ Looking for ADX System-Assigned Managed Identity..." -ForegroundColor DarkGray
+Write-Host "      ─┰─ " -ForegroundColor Gray
+Write-Host "       ┖─ Looking for ADX System-Assigned Managed Identity..." -ForegroundColor Gray
 
 $azureRole          = "Azure Event Hubs Data Receiver"  
 
@@ -489,7 +496,7 @@ try {
 }
 
 Write-Host ""
-Write-Host "           ┖─ Assigning role '$($azureRole)' to Resource Group '$($resourceGroupName)'..." -ForegroundColor DarkGray
+Write-Host "           ┖─ Assigning role '$($azureRole)' to Resource Group '$($resourceGroupName)'..." -ForegroundColor Gray
 
 
 If (!$noDeploy) {
@@ -534,8 +541,8 @@ if ($deploySentinelFunctions) {
     $deploymentName = "SavedSearches-$(Get-Date -Format "yyyMMdd-HHmmss")"
 
     Write-Host "      ─┰─ " -ForegroundColor Gray
-    Write-Host "       ┖─ Deploying Sentinel workspace functions - '$($deploymentName)'..." -ForegroundColor DarkGray
-    Write-Host "           ┖─ Log Analytics Workspace name '$($sentinelWorkspaceName)'" -ForegroundColor DarkGray
+    Write-Host "       ┖─ Deploying Sentinel workspace functions - '$($deploymentName)'..." -ForegroundColor Gray
+    Write-Host "           ┖─ Log Analytics Workspace name '$($sentinelWorkspaceName)'" -ForegroundColor Gray
 
     If (!$noDeploy) {
         try {

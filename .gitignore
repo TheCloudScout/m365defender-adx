@@ -1,3 +1,5 @@
 arm-templates/.DS_Store
 .DS_Store
 temp.ps1
+logo.ps1
+.gitignore
