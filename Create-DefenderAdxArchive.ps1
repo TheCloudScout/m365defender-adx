@@ -68,11 +68,13 @@ param (
     [switch] $skipPreReqChecks,
 
     [Parameter (Mandatory = $false)]
-    [switch] $noDeploy
+    [switch] $noDeploy,
 
+    [Parameter (Mandatory = $false)]
+    [switch] $deploySentinelFunctions
 )
 
-### ADX details
+### Environment specific variables
 
 $eventHubNamespaceNamePrefix    = "eh-defender-archive"     # number-suffix will be added during deployment
 $adxClusterName                 = "adx-defender-archive"    # Cannot exceed 22 characters!
@@ -84,6 +86,9 @@ $adxTableRetention              = "365d"
 $adxTableRawRetention           = "1d"
 $adxScript                      = ""
 $adxScriptFile                  = "adxScript.kusto"
+
+$sentinelWorkspaceName          = "sqn-sentinel-01"
+$sentinelWorkspaceResourceGroup = "rg-security-01" 
 
 ### M365Defender details
 
@@ -101,7 +106,7 @@ $m365defenderSupportedTables    = @(
     "DeviceLogonEvents",
     "DeviceImageLoadEvents",
     "DeviceEvents",
-    "DeviceFileCertificateInfo"
+    "DeviceFileCertificateInfo",
     "EmailAttachmentInfo",
     "EmailEvents",
     "EmailPostDeliveryEvents",
@@ -224,12 +229,12 @@ If (!($useAdxScriptFile)) {
 
         # Create ADX commands
 
-        $createRawTable = '.create-or-alter table {0} (records:dynamic)' -f $tableRaw
+        $createRawTable = '.create table {0} (records:dynamic)' -f $tableRaw
         $CreateRawMapping = @'
 .create-or-alter table {0} ingestion json mapping '{1}' '[{{"Column":"records","Properties":{{"path":"$.records"}}}}]'
 '@ -f $TableRaw, $RawMapping
         $createRawTableRetention = '.alter-merge table {0} policy retention softdelete = {1}' -f $tableRaw, $adxTableRawRetention
-        $createTable = '.create-or-alter table {0} ({1})' -f $tableName, $tableSchema
+        $createTable = '.create table {0} ({1})' -f $tableName, $tableSchema
         $createTableRetention = '.alter-merge table {0} policy retention softdelete = {1} recoverability = enabled' -f $tableName, $adxTableRetention
         $createFunction = @'
 .create-or-alter function {0} {{{1} | mv-expand events = records | project {2} }}
@@ -291,14 +296,12 @@ If (!($useAdxScriptFile)) {
 
 } else {
     Write-Host ""
-    Write-Host "   ✓ Using previously created 'adxScript.kusto' file." -ForegroundColor Magenta
-    Write-Host ""
+    Write-Host "   ✓ Using previously created adxScript file: '$($adxScriptFile)'." -ForegroundColor Magenta
     $adxScript = Get-Content -Path $adxScriptFile -Raw
 }
 
 ### Deploy Azure resources
 
-$tenantId = 'da2d1fdd-f4f7-4483-960e-9742e3742ef4'
 # Sign-in to Azure
 Write-Host ""
 Write-Host "   ▲ Signing in to Azure..." -ForegroundColor Cyan
@@ -311,10 +314,10 @@ if(!(Get-AzContext)) {
 }
 
 # Check Azure prerequisites or skip is -skipPreReqChecks was used
+Write-Host "      ─┰─ " -ForegroundColor DarkGray
+Write-Host "       ┖─ Checking if role assignment prerequisites are met..." -ForegroundColor DarkGray
 if (!($skipPreReqChecks)) {
-    # Check if required Azure role prerequisites are met
-    Write-Host "      ─┰─ " -ForegroundColor DarkGray
-    Write-Host "       ┖─ Checking if role assignment prerequisites are met..." -ForegroundColor DarkGray
+
     $assignedRoles = Get-AzRoleAssignment | Select-Object RoleDefinitionName -ExpandProperty RoleDefinitionName 
     if (!($assignedRoles -contains "Owner")) {
         if (!(($assignedRoles -contains "Contributor") -and ($assignedRoles -contains "User Access Administrator"))) {
@@ -363,7 +366,7 @@ if (!($skipPreReqChecks)) {
     Write-Host "              ✓ All required Azure resource providers are registered properly" -ForegroundColor DarkGreen
 } else {
     Write-Host ""
-    Write-Host "   ✓ Parameter 'skipPreReqChecks' was used. Skipping Azure prerequisites checks." -ForegroundColor Magenta
+    Write-Host "             ✓ Parameter 'skipPreReqChecks' was used. Skipping Azure prerequisites checks." -ForegroundColor Magenta
     Write-Host ""
 }
 
@@ -395,12 +398,12 @@ For ($count = 1; $count -le $eventHubNamespacesCount; $count++) {
 
     If (!$noDeploy) {
         try {
-            $deployment = New-AzResourceGroupDeployment `
-                -Name $deploymentName `
-                -ResourceGroupName $resourceGroupName `
-                -TemplateFile ./arm-templates/eventhub.template.json `
-                -eventHubNamespaceName $eventHubNamespaceName `
-                -eventHubNames $eventHubNames
+            # $deployment = New-AzResourceGroupDeployment `
+            #     -Name $deploymentName `
+            #     -ResourceGroupName $resourceGroupName `
+            #     -TemplateFile ./arm-templates/eventhub.template.json `
+            #     -eventHubNamespaceName $eventHubNamespaceName `
+            #     -eventHubNames $eventHubNames
             If ($deployment.ProvisioningState -eq "Succeeded") {
                 Write-Host "                      ✓ Deployment of '$($eventHubNamespaceName)' was successful" -ForegroundColor DarkGreen
                 Write-Host ""
@@ -441,15 +444,15 @@ For ($count = 1; $count -le $eventHubNamespacesCount; $count++) {
 
     If (!$noDeploy) {
         try {
-            $deployment = New-AzResourceGroupDeployment `
-                -Name $deploymentName `
-                -ResourceGroupName $resourceGroupName `
-                -TemplateFile ./arm-templates/dataexplorer.template.json `
-                -adxClusterName $adxClusterName `
-                -adxDatabaseName $adxDatabaseName `
-                -adxScript $adxScript `
-                -eventHubNamespaceName $eventHubNamespaceName `
-                -tableNames $tableNames
+            # $deployment = New-AzResourceGroupDeployment `
+            #     -Name $deploymentName `
+            #     -ResourceGroupName $resourceGroupName `
+            #     -TemplateFile ./arm-templates/dataexplorer.template.json `
+            #     -adxClusterName $adxClusterName `
+            #     -adxDatabaseName $adxDatabaseName `
+            #     -adxScript $adxScript `
+            #     -eventHubNamespaceName $eventHubNamespaceName `
+            #     -tableNames $tableNames
             If ($deployment.ProvisioningState -eq "Succeeded") {
                 Write-Host "                      ✓ Deployment of '$($adxClusterName)' was successful" -ForegroundColor DarkGreen
                 Write-Host ""
@@ -488,32 +491,81 @@ try {
 Write-Host ""
 Write-Host "           ┖─ Assigning role '$($azureRole)' to Resource Group '$($resourceGroupName)'..." -ForegroundColor DarkGray
 
-$paramHash = @{
-    ObjectId           = $managedIdentity
-    RoleDefinitionName = $AzureRole
-    ResourceGroupName  = $resourceGroupName
-    WarningAction      = 'SilentlyContinue'
-}
 
-# Check if role is already assigned to avoid errors
-try {
-    $RoleAssignment = Get-AzRoleAssignment @paramHash -ErrorAction stop
-} catch {
-    Write-Host ""
-    Write-Host "              ✘ An error occured while retrieving permissions for '$($managedIdentity)'. Check if Managed Identity is enabled within the Data Explorer cluster."
-}
+If (!$noDeploy) {
+    $paramHash = @{
+        ObjectId           = $managedIdentity
+        RoleDefinitionName = $AzureRole
+        ResourceGroupName  = $resourceGroupName
+        WarningAction      = 'SilentlyContinue'
+    }
 
-# Assign permissions to Managed Identities
-if ($null -eq $RoleAssignment) {
+    # Check if role is already assigned to avoid errors
     try {
-        $null = New-AzRoleAssignment @paramHash -ErrorAction stop
-        Write-Host "              ✓ Role '$($azureRole)' assigned" -ForegroundColor DarkGreen
+        $RoleAssignment = Get-AzRoleAssignment @paramHash -ErrorAction stop
     } catch {
         Write-Host ""
-        Write-Host "              ✘ An error occured while assigning '$($azureRole)' for '$($managedIdentity)' to '$($resourceGroupName)'."
+        Write-Host "              ✘ An error occured while retrieving permissions for '$($managedIdentity)'. Check if Managed Identity is enabled within the Data Explorer cluster."
     }
-} else {
-    Write-Host "              ✓ Role '$($azureRole)' was already assigned" -ForegroundColor DarkGreen
-}
 
+    # Assign permissions to Managed Identities
+    if ($null -eq $RoleAssignment) {
+        try {
+            $null = New-AzRoleAssignment @paramHash -ErrorAction stop
+            Write-Host "                  ✓ Role '$($azureRole)' assigned" -ForegroundColor DarkGreen
+        }
+        catch {
+            Write-Host ""
+            Write-Host "                  ✘ An error occured while assigning '$($azureRole)' for '$($managedIdentity)' to '$($resourceGroupName)'."
+        }
+    }
+    else {
+        Write-Host "                  ✓ Role '$($azureRole)' was already assigned" -ForegroundColor DarkGreen
+    }
+}
+else {
+    Write-Host "                  ! Switch 'noDeploy' was provided, skipping Azure deployment..." -ForegroundColor Magenta
+}
+Write-Host ""
+
+### Deploy Sentinel workspace functions (savedSearches) [ OPTIONAL ]
+
+if ($deploySentinelFunctions) {
+    $deploymentName = "SavedSearches-$(Get-Date -Format "yyyMMdd-HHmmss")"
+
+    Write-Host "      ─┰─ " -ForegroundColor Gray
+    Write-Host "       ┖─ Deploying Sentinel workspace functions - '$($deploymentName)'..." -ForegroundColor DarkGray
+    Write-Host "           ┖─ Log Analytics Workspace name '$($sentinelWorkspaceName)'" -ForegroundColor DarkGray
+
+    If (!$noDeploy) {
+        try {
+            # Concatenate ADX cluster Uri
+            $adxClusterName = $adxClusterName + "." + (Get-AzResourceGroup $sentinelWorkspaceResourceGroup).Location + ".kusto.windows.net"
+            
+            $deployment = New-AzResourceGroupDeployment `
+                -Name $deploymentName `
+                -ResourceGroupName $sentinelWorkspaceResourceGroup `
+                -TemplateFile arm-templates/workspacefunctions.template.json `
+                -workspaceName $sentinelWorkspaceName `
+                -adxClusterName $adxClusterName `
+                -adxDatabaseName $adxDatabaseName
+            If ($deployment.ProvisioningState -eq "Succeeded") {
+                Write-Host "                 ✓ Deployment of savedSearches in workspace '$($sentinelWorkspaceName)' was successful" -ForegroundColor DarkGreen
+                Write-Host ""
+            }
+            else {
+                Write-Host "                 ! There was an issue deploying to '$($sentinelWorkspaceName)' please check deployment '$($deployment.DeploymentName)'!" -ForegroundColor Yellow
+            }
+        }
+        catch {
+            Write-Host ""
+            Write-Host "                 ✘ There was a problem deploying to Azure! Exiting..." -ForegroundColor Red
+            Write-Host ""
+            exit
+        }
+    }
+    else {
+        Write-Host "                 ! Switch 'noDeploy' was provided, skipping Azure role assignment..." -ForegroundColor Magenta
+    }
+}
 Write-Host ""

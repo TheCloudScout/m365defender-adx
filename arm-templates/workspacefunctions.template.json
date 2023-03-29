@@ -1,0 +1,60 @@
+{
+    "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
+    "contentVersion": "1.0.0.0",
+    "parameters": {
+        "workspaceName": {
+            "type": "string"
+        },
+        "adxClusterName": {
+            "type": "string"
+        },
+        "adxDatabaseName": {
+            "type": "string"
+        },
+        "tableNames": {
+            "type": "array",
+            "defaultValue": [
+                "AlertInfo",
+                "AlertEvidence",
+                "DeviceInfo",
+                "DeviceNetworkInfo",
+                "DeviceProcessEvents",
+                "DeviceNetworkEvents",
+                "DeviceFileEvents",
+                "DeviceRegistryEvents",
+                "DeviceLogonEvents",
+                "DeviceImageLoadEvents",
+                "DeviceEvents",
+                "DeviceFileCertificateInfo",
+                "EmailAttachmentInfo",
+                "EmailEvents",
+                "EmailPostDeliveryEvents",
+                "EmailUrlInfo",
+                "UrlClickEvents",
+                "IdentityLogonEvents",
+                "IdentityQueryEvents",
+                "IdentityDirectoryEvents",
+                "CloudAppEvents"
+            ]
+        }
+    },
+    "variables": {},
+    "resources": [
+        {
+            "type": "Microsoft.OperationalInsights/workspaces/savedSearches",
+            "apiVersion": "2020-08-01",
+            "name": "[concat(parameters('workspaceName'), '/', 'adx_', parameters('tableNames')[copyIndex()])]",
+            "copy": {
+                "name": "tables",
+                "count": "[length(parameters('tableNames'))]"
+            },
+            "properties": {
+                "etag": "*",
+                "category": "ADX",
+                "displayName": "[concat('adx_', parameters('tableNames')[copyIndex()])]",
+                "query": "[concat('adx(\"https://', parameters('adxClusterName') ,'/', parameters('adxDatabaseName'), '\").', parameters('tableNames')[copyIndex()])]",
+                "functionAlias": "[concat('adx_', parameters('tableNames')[copyIndex()])]"
+            }
+        }
+    ]
+}
