@@ -7,20 +7,20 @@
     .PARAMETER tenantId [string]
     The Tenant ID of the Azure Active Directory in which the app registration and Azure subscription resides.
     .PARAMETER appId [string]
-    The app id of the application used to query Defender and to deploy Azure resources.
+    The App ID of the application used to query Microsoft Graph to retrieve Defender table schemas.
     .PARAMETER appSecret [string]
-    An active secret for the app registration to query Defender and to deploy Azure resources.
+    An active secret for the App Registration to query Microsoft Graph to retrieve Defender table schemas.
     .PARAMETER subscriptionId [string]
-    Azure subscription Id in where archive resources should be deployed.
+    Azure Subscription ID in which the archive resources should be deployed.
     .PARAMETER resourceGroupName [string]
-    Name of resource group in which archive resources should be deployed.
+    Name of the Resource Group in which archive resources should be deployed.
     .PARAMETER m365defenderTables [string]
-    Single line string and comma-sepparated list of tables you want to setup an archive for. Keep in mind to user proper PascalCase for table names!
-    If parameter is not provided, this solution will use all tables supported by streaming API and will setup archival on all of them.
+    Comma-separated list of tables you want to setup an archive for. Keep in mind to user proper "PascalCase" for table names!
+    If this parameter is not provided, the script will use all tables supported by streaming API, and will setup archival on all of them.
     .PARAMETER outputAdxScript [switch]
     Used for debugging purposes so that the script will output the ADX script on screen before it gets passed into the deployments.
     .PARAMETER saveAdxScript [switch]
-    User -savedAdxScript to write content of $adxScript to 'adxScript.kusto' file. File can be re-used with -useAdxScript parameter.
+    Use -savedAdxScript to write content of $adxScript to 'adxScript.kusto' file. File can be re-used with -useAdxScript parameter.
     .PARAMETER useAdxScriptFile [string]
     Provide path to existing 'adxScript.kusto' file created by -saveAdxScript parameter.
     .PARAMETER skipPreReqChecks [switch]
