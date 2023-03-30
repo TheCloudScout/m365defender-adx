@@ -140,16 +140,17 @@ If ($m365defenderTables) {
 
 Clear-Host
 
-Write-Host "                                                                   "
-Write-Host "          Microsoft 365 Defender                                   " -ForegroundColor DarkBlue
-Write-Host "        _______             ______ _____            ________       " -ForegroundColor DarkGreen
-Write-Host "       ____    |_______________  /____(_)__   _________  __ \      " -ForegroundColor DarkGreen
-Write-Host "     _____  /| |_  ___/  ___/_  __ \_  /__ | / /  _ \_  /_/ /      " -ForegroundColor DarkGreen
-Write-Host "    _____  ___ |  /   / /__ _  / / /  / __ |/ //  __/  _, _/       " -ForegroundColor DarkGreen
-Write-Host "   _____/_/  |_/_/    \___/ /_/ /_//_/  _____/ \___//_/ |_|        " -ForegroundColor DarkGreen
-Write-Host "                                                                   " -ForegroundColor DarkGreen
-Write-Host "                _ AZURE DATA EXPLORER EDiTION _                    " -ForegroundColor DarkGray
-Write-Host "                                                                   "
+Write-Host "                                                                    "
+Write-Host "           Microsoft 365 Defender                                   " -ForegroundColor DarkBlue
+Write-Host "         _______             ______ _____            ________       " -ForegroundColor DarkGreen
+Write-Host "        ____    |_______________  /____(_)__   _________  __ \      " -ForegroundColor DarkGreen
+Write-Host "      _____  /| |_  ___/  ___/_  __ \_  /__ | / /  _ \_  /_/ /      " -ForegroundColor DarkGreen
+Write-Host "     _____  ___ |  /   / /__ _  / / /  / __ |/ //  __/  _, _/       " -ForegroundColor DarkGreen
+Write-Host "    _____/_/  |_/_/    \___/ /_/ /_//_/  _____/ \___//_/ |_|        " -ForegroundColor DarkGreen
+Write-Host " ╱──────────────┬─────────────────────────────┬───────────────╱     " -ForegroundColor DarkGray
+Write-Host "                │ AZURE DATA EXPLORER EDiTION │                     " -ForegroundColor DarkGray
+Write-Host "                └─────────────────────────────┘                     " -ForegroundColor DarkGray
+Write-Host "                                                                    "
 
 ### Construct AdxScript with all ADX commands for appropriate tables and schemas
 
