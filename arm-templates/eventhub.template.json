@@ -17,15 +17,26 @@
       "type": "string",
       "allowedValues": [
         "basic",
-        "standard"
+        "standard",
+        "premium"
       ],
       "defaultValue": "standard"
     },
     "skuCapacity": {
       "type": "int",
       "minValue": 0,
-      "maxValue": 20,
+      "maxValue": 40,
       "defaultValue": 1
+    },
+    "enableAutoInflate": {
+      "type": "bool",
+      "defaultValue": true
+    },
+    "maxAutoInflate": {
+      "type": "int",
+      "minValue": 0,
+      "maxValue": 40,
+      "defaultValue": 40
     },
     "partitionCount": {
       "type": "int",
@@ -47,7 +58,7 @@
   "resources": [
     {
       "type": "Microsoft.EventHub/namespaces",
-      "apiVersion": "2018-01-01-preview",
+      "apiVersion": "2021-11-01",
       "name": "[parameters('eventHubNamespaceName')]",
       "location": "[resourceGroup().location]",
       "sku": {
@@ -57,8 +68,8 @@
       },
       "properties": {
         "zoneRedundant": "[parameters('zoneRedundant')]",
-        "isAutoInflateEnabled": true,
-        "maximumThroughputUnits": 0,
+        "isAutoInflateEnabled": "[parameters('enableAutoInflate')]",
+        "maximumThroughputUnits": "[parameters('maxAutoInflate')]",
         "kafkaEnabled": true
       }
     },
