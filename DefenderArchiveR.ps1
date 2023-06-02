@@ -23,7 +23,7 @@
     Used for debugging purposes so that the script will output the ADX script on screen before it gets passed into the deployments.
     .PARAMETER saveAdxScript [switch]
     Use -savedAdxScript to write content of $adxScript to 'adxScript.kusto' file. File can be re-used with -useAdxScript parameter.
-    .PARAMETER useAdxScriptFile [string]
+    .PARAMETER useAdxScript [string]
     Provide path to existing 'adxScript.kusto' file created by -saveAdxScript parameter.
     .PARAMETER skipPreReqChecks [switch]
     Skip Azure subscription checks like checking enabled resource providers and current permissions. Useful when using this script in a pipeline where you're already sure of these prerequisites.
@@ -62,7 +62,7 @@ param (
     [switch] $saveAdxScript,
 
     [Parameter (Mandatory = $false)]
-    [string] $useAdxScriptFile,
+    [string] $useAdxScript,
 
     [Parameter (Mandatory = $false)]
     [switch] $skipPreReqChecks,
@@ -141,8 +141,8 @@ $m365defenderSupportedTables    = @(
 $exit = $false
 If ($m365defenderTables) {
     # Proces m365defenderTables parameter (split and trim) into array
-    $m365defenderTables = ($m365defenderTables -split (',')).trim()
-    foreach ($table in $m365defenderTables) {
+    $checkTables = ($m365defenderTables.split(',')).trim()
+    foreach ($table in $checkTables) {
         # Check if all provided table names are support by streaming API
         if (!($m365defenderSupportedTables -contains $table)) {
             Write-Host " ✘ Invalid 'm365defenderTables' parameter!" -ForegroundColor Red
@@ -154,10 +154,11 @@ If ($m365defenderTables) {
     if ($exit) { 
         exit
     }
+    $archiveTables = $checkTables
 } else {
-    $m365defenderTables = $m365defenderSupportedTables
+    $archiveTables = $m365defenderSupportedTables
 }
-$m365defenderTablesString = '"' + ($m365defenderTables -join '", "') + '"' 
+$archiveTablesString = '"' + ($archiveTables -join '", "') + '"' 
 
 Clear-Host
 
@@ -173,49 +174,49 @@ Write-Host "                │ AZURE DATA EXPLORER EDiTION │                 
 Write-Host "                └─────────────────────────────┘                     " -ForegroundColor DarkGray
 Write-Host "                                                                    "
 
+# Get AAD authorization token
+Write-Host ""
+Write-Host "   ▲ Getting access token from api.securitycenter.microsoft.com..." -ForegroundColor Cyan
+
+$scope = 'https://graph.microsoft.com/.default'
+$oAuthUri = "https://login.microsoftonline.com/$tenantId/oauth2/v2.0/token"
+$body = [Ordered] @{
+    scope         = $scope
+    client_id     = "$appId"
+    client_secret = "$appSecret"
+    grant_type    = 'client_credentials'
+}
+$response = Invoke-RestMethod -Method Post -Uri $oAuthUri -Body $body -ErrorAction Stop
+$aadToken = $response.access_token
+
+### Construct header for API requests towards AdvancedHunting API
+
+$url = "https://graph.microsoft.com/v1.0/security/runHuntingQuery"
+$headers = @{ 
+    'Content-Type' = 'application/json'
+    Authorization  = "Bearer $aadToken" 
+}
+
 ### Construct AdxScript with all ADX commands for appropriate tables and schemas
 
-If (!($useAdxScriptFile)) {
-
-    # Get AAD authorization token
-    Write-Host ""
-    Write-Host "   ▲ Getting access token from api.securitycenter.microsoft.com..." -ForegroundColor Cyan
-
-    $scope = 'https://graph.microsoft.com/.default'
-    $oAuthUri = "https://login.microsoftonline.com/$tenantId/oauth2/v2.0/token"
-    $body = [Ordered] @{
-        scope         = $scope
-        client_id     = "$appId"
-        client_secret = "$appSecret"
-        grant_type    = 'client_credentials'
-    }
-    $response = Invoke-RestMethod -Method Post -Uri $oAuthUri -Body $body -ErrorAction Stop
-    $aadToken = $response.access_token
-
-    ### Construct header for API requests towards AdvancedHunting API
-
-    $url = "https://graph.microsoft.com/v1.0/security/runHuntingQuery"
-    $headers = @{ 
-        'Content-Type' = 'application/json'
-        Authorization  = "Bearer $aadToken" 
-    }
+If (!($useAdxScript)) {
 
     # Output all tables that will be processed for schema query
 
     Write-Host "      ─┰─ " -ForegroundColor Gray
-    Write-Host "       ┖─ The folowwing tables will be processed from Microsoft 365 Defender:" -ForegroundColor Gray
-    foreach ($table in $m365defenderTables) {
+    Write-Host "       ┖─ The following tables will be processed from Microsoft 365 Defender:" -ForegroundColor Gray
+    foreach ($table in $archiveTables) {
         Write-Host "             - $($table)" -ForegroundColor Gray
     }
 
     ### Loop through all m365d tables, query schema and construct ADX script variable
 
-    foreach ($tableName in $m365defenderTables) {
+    foreach ($table in $archiveTables) {
 
         # Query schema @ AdvancedHunting API
-        Write-Host "       ┖─ Querying schema for '$($tableName)' @ AdvancedHunting API..." -ForegroundColor Gray
+        Write-Host "       ┖─ Querying schema for '$($table)' @ AdvancedHunting API..." -ForegroundColor Gray
 
-        $body = ConvertTo-Json -InputObject @{ 'Query' = $tableName + $schemaQuery }
+        $body = ConvertTo-Json -InputObject @{ 'Query' = $table + $schemaQuery }
         # Query API and retry if timeout occurs
         try {
             For ($retry = 0; $retry -le 5; $retry++) {
@@ -237,9 +238,9 @@ If (!($useAdxScriptFile)) {
 
         # Create ADX commands script
 
-        $tableExpandFunction    = $tableName    + 'Expand'
-        $tableRaw               = $tableName    + 'Raw'
-        $rawMapping             = $tableRaw     + 'Mapping'
+        $tableExpandFunction    = $table    + 'Expand'
+        $tableRaw               = $table    + 'Raw'
+        $rawMapping             = $tableRaw + 'Mapping'
 
         $tableColumns           = @()
         $expandColumns          = @()
@@ -263,18 +264,18 @@ If (!($useAdxScriptFile)) {
 .create-or-alter table {0} ingestion json mapping '{1}' '[{{"Column":"records","Properties":{{"path":"$.records"}}}}]'
 '@ -f $TableRaw, $RawMapping
         $createRawTableRetention = '.alter-merge table {0} policy retention softdelete = {1}' -f $tableRaw, $adxTableRawRetention
-        $createTable = '.create table {0} ({1})' -f $tableName, $tableSchema
-        $createTableRetention = '.alter-merge table {0} policy retention softdelete = {1} recoverability = enabled' -f $tableName, $adxTableRetention
+        $createTable = '.create table {0} ({1})' -f $table, $tableSchema
+        $createTableRetention = '.alter-merge table {0} policy retention softdelete = {1} recoverability = enabled' -f $table, $adxTableRetention
         $createFunction = @'
 .create-or-alter function {0} {{{1} | mv-expand events = records | project {2} }}
 '@ -f $tableExpandFunction, $tableRaw, $expandFunction
         $createPolicyUpdate = @'
 .alter table {0} policy update @'[{{"Source": "{1}", "Query": "{2}()", "IsEnabled": "True", "IsTransactional": true}}]'
-'@ -f $tableName, $tableRaw, $tableExpandFunction
+'@ -f $table, $tableRaw, $tableExpandFunction
 
         # Write ADX commands to ADX script variable
 
-        Write-Host "           ┖─ Adding ADX commands for $($tableName) to ADX script..." -ForegroundColor Gray
+        Write-Host "           ┖─ Adding ADX commands for $($table) to ADX script..." -ForegroundColor Gray
 
         $adxScript = $adxScript + "`n$createRawTable`n"
         $adxScript = $adxScript + "`n$createRawMapping`n"
@@ -295,6 +296,7 @@ If (!($useAdxScriptFile)) {
     # Display ADX script (optional depending on outputAdxScript switch)
     If ($outputAdxScript) {
         $adxScriptFile = "adxScript.kusto"
+
         Write-Host "              ✓ Done generating ADX script, press any key to display..." -ForegroundColor DarkGreen
         Write-Host ""
         # write adxScript to file
@@ -325,21 +327,24 @@ If (!($useAdxScriptFile)) {
     }
 } else {
     Write-Host ""
-    Write-Host "   ✓ Using previously created adxScript file: '$($adxScriptFile)'." -ForegroundColor Magenta
-    $adxScript = Get-Content -Path $adxScriptFile -Raw
+    Write-Host "   ✓ Using previously created adxScript file: '$($useAdxScript)'." -ForegroundColor Magenta
+    $adxScript = Get-Content -Path $useAdxScript -Raw
 }
 
 ### Deploy Azure resources
 
+# Construct Credentials object
+$credentials = [ordered]@{
+    tenantId            = $tenantId
+    serviceprincipalId  = $appId
+    servicePrincipalKey = $appSecret
+}
+# Create PowerShell credential object
+$psCred = New-Object System.Management.Automation.PSCredential($credentials.serviceprincipalId , (ConvertTo-SecureString $credentials.servicePrincipalKey -AsPlainText -Force))
 # Sign-in to Azure
 Write-Host ""
 Write-Host "   ▲ Signing in to Azure..." -ForegroundColor Cyan
-
-# Check if already connected to Azure
-if(!(Get-AzContext)) {
-    Add-AzAccount -TenantId $tenantId -SubscriptionId $subscriptionId | Out-Null
-    Start-Sleep -Seconds 2
-}
+Add-AzAccount -Credential $psCred -TenantId $credentials.tenantId -ServicePrincipal -SubscriptionId $subscriptionId | Out-Null
 
 # Check Azure prerequisites or skip is -skipPreReqChecks was used
 Write-Host "      ─┰─ " -ForegroundColor Gray
@@ -400,10 +405,10 @@ if (!($skipPreReqChecks)) {
 
 # Since we can only deply 10 Event Hubs per Event Hub Namespace, we need to determine how many Event Hub Namespaces we'll be needing
 Write-Host "       ┃" -ForegroundColor Gray
-Write-Host "       ┖─ Calculating the most optimal spread of Event Hubs on Namespaces based on performance..." -ForegroundColor Gray
+Write-Host "       ┖─ Retrieving table statistics to determine performance requirements for Event Hub Namespace..." -ForegroundColor Gray
 
 # Retrieve EPS (events per second) and MBPS (MegaByte per seond) peaks per table
-$body = ConvertTo-Json -InputObject @{ 'Query' = $performanceQuery.Replace("<TABLES>", $m365defenderTablesString) }
+$body = ConvertTo-Json -InputObject @{ 'Query' = $performanceQuery.Replace("<TABLES>", $archiveTablesString) }
 
 # Query API and retry if timeout occurs
 try {
@@ -415,22 +420,22 @@ try {
             Write-Host "              ! Timeout occured while querying the AdvancedHunting API! Retrying..." -ForegroundColor Yellow
         }
     }
+    $response   = $webResponse | ConvertFrom-Json
+    $results    = $response.Results
 } catch {
     Write-Host "              ✘ Something went wrong while querying the AdvancedHunting API!" -ForegroundColor Red
     Write-Host ""
     exit
 }
-$response   = $webResponse | ConvertFrom-Json
-$results    = $response.Results
 
 # Since we can only deply 10 Event Hubs per Event Hub Namespace, we need to determine how many Event Hub Namespaces we'll be needing
 # But we also need to take into the account the amount of throughput units on the Event Hub Namespace we're going to need. 
 # Since each Namespacer has a max TU value of 40, we need to made sure that we don't exceed this. Otherwise trottling might occur and data loss can occur.
-Write-Host "       ┃" -ForegroundColor Gray
-Write-Host "       ┖─ Calculating the amount of Event Hub Namespaces needed..." -ForegroundColor Gray
+Write-Host "           ┖─ Calculating the amount of Event Hub Namespaces needed..." -ForegroundColor Gray
 
-$eventHubNamespacesCount = [int][math]::ceiling(($results | Select-Object -ExpandProperty RequiredThroughPutUnits | Measure-Object -Sum).Sum / 39)  
-Write-Host "              ✓ In order to create these $($results.Count) Event Hubs, we'll be needing $($eventHubNamespacesCount) Event Hub Namespaces." -ForegroundColor DarkGreen
+$eventHubNamespacesCount = [int][math]::ceiling(($results | Select-Object -ExpandProperty RequiredThroughPutUnits | Measure-Object -Sum).Sum / 39)
+if ($eventHubNamespacesCount -lt 1) { $eventHubNamespacesCount = 1 }
+Write-Host "                  ✓ In order to create these $($results.Count) Event Hubs, $($eventHubNamespacesCount) Event Hub Namespaces need to be deployed." -ForegroundColor DarkGreen
 
 # Create variables with dynamic names i.e. '$EventHubNames1', '$EventHubNames2' etc.
 for ($count = 1; $count -le $eventHubNamespacesCount; $count++) {
@@ -457,14 +462,14 @@ For ($count = 1; $count -le $eventHubNamespacesCount; $count++) {
     $eventHubNames          = (Get-Variable "EventHubNames$($count)" -ValueOnly).ToLower() | Foreach-Object { "insights-logs-advancedhunting-$_" }
     
     if (1 -eq $count) {
-        Write-Host "                ─┰─ " -ForegroundColor Gray
+        Write-Host "            ─┰─ " -ForegroundColor Gray
     } else {
-        Write-Host "                 ┃" -ForegroundColor Gray
+        Write-Host "             ┃" -ForegroundColor Gray
     }
-    Write-Host "                 ┖─ Deploying Event Hub Namespace [ $($count) / $($eventHubNamespacesCount) ] - '$($deploymentName)'..." -ForegroundColor Gray
-    Write-Host "                     ┖─ Event Hub Namespace '$($eventHubNamespaceName)'" -ForegroundColor Gray
+    Write-Host "             ┖─ Deploying Event Hub Namespace [ $($count) / $($eventHubNamespacesCount) ] - '$($deploymentName)'..." -ForegroundColor Gray
+    Write-Host "                 ┖─ Event Hub Namespace '$($eventHubNamespaceName)'" -ForegroundColor Gray
     foreach ($eventHubName in $eventHubNames) {
-        Write-Host "                         ┖─ Event Hub '$($eventHubName)'" -ForegroundColor Gray
+        Write-Host "                     ┖─ Event Hub '$($eventHubName)'" -ForegroundColor Gray
     }
 
     If (!$noDeploy) {
@@ -472,27 +477,27 @@ For ($count = 1; $count -le $eventHubNamespacesCount; $count++) {
             $deployment = New-AzResourceGroupDeployment `
                 -Name $deploymentName `
                 -ResourceGroupName $resourceGroupName `
-                -TemplateFile ./arm-templates/eventhub.template.json `
+                -TemplateFile arm-templates/eventhub.template.json `
                 -eventHubNamespaceName $eventHubNamespaceName `
                 -eventHubNames $eventHubNames
             If ($deployment.ProvisioningState -eq "Succeeded") {
-                Write-Host "                      ✓ Deployment of '$($eventHubNamespaceName)' was successful" -ForegroundColor DarkGreen
+                Write-Host "                  ✓ Deployment of '$($eventHubNamespaceName)' was successful" -ForegroundColor DarkGreen
                 Write-Host ""
-                Write-Host "                              $eventHubNames" -ForegroundColor Magenta
+                foreach ($eventHub in $eventHubNames) { Write-Host "                              - $($eventHub.Substring(30))" -ForegroundColor Magenta }
                 Write-Host ""
-                Write-Host "                              $($deployment.outputs.eventHubNamespaceResourceId.value)" -ForegroundColor Magenta
-                Write-Host "                                   ˆ-- Use this resource ID and these table names for setting up Streaming API in Microsoft 365 Defender." -ForegroundColor Yellow
+                Write-Host "                          $($deployment.outputs.eventHubNamespaceResourceId.value)" -ForegroundColor Magenta
+                Write-Host "                               ˆ-- Use this resource ID and these table names for setting up Streaming API in Microsoft 365 Defender." -ForegroundColor Yellow
             } else {
-                Write-Host "                      ! There was an issue deploying '$($eventHubNamespaceName)' please check deployment '$($deployment.DeploymentName)'!" -ForegroundColor Yellow
+                Write-Host "                  ! There was an issue deploying '$($eventHubNamespaceName)' please check deployment '$($deployment.DeploymentName)'!" -ForegroundColor Yellow
             }
         } catch {
             Write-Host ""
-            Write-Host "                     ✘ There was a problem deploying to Azure! Exiting..." -ForegroundColor Red
+            Write-Host "                 ✘ There was a problem deploying to Azure! Exiting..." -ForegroundColor Red
             Write-Host ""
             exit
         }
     } else {
-        Write-Host "                     ! Switch 'noDeploy' was provided, skipping Azure deployment..." -ForegroundColor Magenta
+        Write-Host "                 ! Switch 'noDeploy' was provided, skipping Azure deployment..." -ForegroundColor Magenta
     }
 }
 
@@ -502,16 +507,16 @@ For ($count = 1; $count -le $eventHubNamespacesCount; $count++) {
     $deploymentName         = "DataExplorer-$(Get-Date -Format "yyyMMdd-HHmmss")"
     $eventHubNamespaceName  = "$($eventHubNamespaceNamePrefix)-0$($count)"
     # Select tables for each Event Hub Namespace, make them lowercase and add prefix
-    $tableNames             = (Get-Variable "EventHubNames$($count)" -ValueOnly)
+    $tables                 = (Get-Variable "EventHubNames$($count)" -ValueOnly)
     
     if (1 -eq $count) {
-        Write-Host "                 ┃" -ForegroundColor Gray
-        Write-Host "                 ┖─ Deploying Azure Data Explorer Cluster - '$($deploymentName)'..." -ForegroundColor Gray
-        Write-Host "                     ┖─ ADX cluster name '$($adxClusterName)'" -ForegroundColor Gray
-        Write-Host "                         ┖─ Database name '$($adxDatabaseName)'" -ForegroundColor Gray
+        Write-Host "             ┃" -ForegroundColor Gray
+        Write-Host "             ┖─ Deploying Azure Data Explorer Cluster - '$($deploymentName)'..." -ForegroundColor Gray
+        Write-Host "                 ┖─ ADX cluster name '$($adxClusterName)'" -ForegroundColor Gray
+        Write-Host "                     ┖─ Database name '$($adxDatabaseName)'" -ForegroundColor Gray
     }
-    foreach($tableName in $tableNames) {
-        Write-Host "                             ┖─ Data Connection 'dc-$($tableName)'" -ForegroundColor Gray
+    foreach ($table in $tables) {
+        Write-Host "                         ┖─ Data Connection 'dc-$($table)'" -ForegroundColor Gray
     }
 
     If (!$noDeploy) {
@@ -519,26 +524,26 @@ For ($count = 1; $count -le $eventHubNamespacesCount; $count++) {
             $deployment = New-AzResourceGroupDeployment `
                 -Name $deploymentName `
                 -ResourceGroupName $resourceGroupName `
-                -TemplateFile ./arm-templates/dataexplorer.template.json `
+                -TemplateFile arm-templates/dataexplorer.template.json `
                 -adxClusterName $adxClusterName `
                 -adxDatabaseName $adxDatabaseName `
                 -adxScript $adxScript `
                 -eventHubNamespaceName $eventHubNamespaceName `
-                -tableNames $tableNames
+                -tableNames $tables
             If ($deployment.ProvisioningState -eq "Succeeded") {
-                Write-Host "                      ✓ Deployment of '$($adxClusterName)' was successful" -ForegroundColor DarkGreen
+                Write-Host "                  ✓ Deployment of '$($adxClusterName)' was successful" -ForegroundColor DarkGreen
                 Write-Host ""
             } else {
-                Write-Host "                      ! There was an issue deploying '$($adxClusterName)' please check deployment '$($deployment.DeploymentName)'!" -ForegroundColor Yellow
+                Write-Host "                  ! There was an issue deploying '$($adxClusterName)' please check deployment '$($deployment.DeploymentName)'!" -ForegroundColor Yellow
             }
         } catch {
             Write-Host ""
-            Write-Host "                     ✘ There was a problem deploying to Azure! Exiting..." -ForegroundColor Red
+            Write-Host "                 ✘ There was a problem deploying to Azure! Exiting..." -ForegroundColor Red
             Write-Host ""
             exit
         }
     } else {
-        Write-Host "                     ! Switch 'noDeploy' was provided, skipping Azure role assignment..." -ForegroundColor Magenta
+        Write-Host "                 ! Switch 'noDeploy' was provided, skipping Azure role assignment..." -ForegroundColor Magenta
     }
 }
 
