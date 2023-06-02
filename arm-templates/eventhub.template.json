@@ -31,7 +31,7 @@
       "type": "int",
       "minValue": 1,
       "maxValue": 32,
-      "defaultValue": 4
+      "defaultValue": 32
     },
     "zoneRedundant": {
       "type": "bool",
@@ -57,7 +57,7 @@
       },
       "properties": {
         "zoneRedundant": "[parameters('zoneRedundant')]",
-        "isAutoInflateEnabled": false,
+        "isAutoInflateEnabled": true,
         "maximumThroughputUnits": 0,
         "kafkaEnabled": true
       }
