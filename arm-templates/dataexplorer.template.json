@@ -4,7 +4,6 @@
   "parameters": {
     "adxClusterName": {
       "type": "string",
-      "defaultValue": "[concat('adx', uniqueString(resourceGroup().id))]",
       "metadata": {
         "description": "Name of the cluster to create"
       }

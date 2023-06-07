@@ -3,8 +3,7 @@
   "contentVersion": "1.0.0.0",
   "parameters": {
     "eventHubNamespaceName": {
-      "type": "string",
-      "defaultValue": "eh-defender-archive-01"
+      "type": "string"
     },
     "eventHubNames": {
       "type": "array",
@@ -55,6 +54,7 @@
       "defaultValue": 7
     }
   },
+  "variables": {},
   "resources": [
     {
       "type": "Microsoft.EventHub/namespaces",
